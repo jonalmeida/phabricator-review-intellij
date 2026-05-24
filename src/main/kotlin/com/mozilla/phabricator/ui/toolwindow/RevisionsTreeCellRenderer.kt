@@ -1,8 +1,10 @@
 package com.mozilla.phabricator.ui.toolwindow
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.SimpleTextAttributes
+import com.mozilla.phabricator.conduit.model.ChangesetType
 import javax.swing.JTree
 import javax.swing.tree.DefaultMutableTreeNode
 
@@ -37,6 +39,20 @@ class RevisionsTreeCellRenderer : ColoredTreeCellRenderer() {
                 toolTipText = "${m.monogram} — ${m.title} (${m.statusValue})"
             }
 
+            is RevisionsTreeNode.FileChange -> {
+                val fileType = FileTypeManager.getInstance().getFileTypeByFileName(payload.path)
+                icon = fileType.icon ?: AllIcons.FileTypes.Any_type
+                val statusLabel = changeStatusLabel(payload.changeset.type)
+                if (statusLabel.isNotEmpty()) {
+                    append(statusLabel, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                    append(" ")
+                }
+                append(payload.path, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+                toolTipText =
+                    "${payload.changeset.addLines} added, " +
+                        "${payload.changeset.delLines} removed"
+            }
+
             RevisionsTreeNode.Loading -> {
                 icon = AllIcons.Process.Step_1
                 append("Loading…", SimpleTextAttributes.GRAYED_ITALIC_ATTRIBUTES)
@@ -55,4 +71,16 @@ class RevisionsTreeCellRenderer : ColoredTreeCellRenderer() {
             else -> append(payload?.toString() ?: "", SimpleTextAttributes.REGULAR_ATTRIBUTES)
         }
     }
+
+    private fun changeStatusLabel(type: ChangesetType): String =
+        when (type) {
+            ChangesetType.ADD -> "A"
+            ChangesetType.CHANGE -> "M"
+            ChangesetType.DELETE -> "D"
+            ChangesetType.MOVE_AWAY,
+            ChangesetType.MOVE_HERE -> "R"
+            ChangesetType.COPY_AWAY,
+            ChangesetType.COPY_HERE,
+            ChangesetType.MULTICOPY -> "C"
+        }
 }

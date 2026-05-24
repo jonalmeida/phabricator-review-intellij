@@ -4,11 +4,16 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.treeStructure.Tree
+import com.mozilla.phabricator.conduit.model.Changeset
+import com.mozilla.phabricator.diff.ChangesetDiffOpener
 import com.mozilla.phabricator.service.PhabSessionService
+import com.mozilla.phabricator.service.RevisionModel
 import com.mozilla.phabricator.service.RevisionsManager
 import com.mozilla.phabricator.service.RevisionsManager.CategoryKey
+import java.awt.event.MouseEvent
 import javax.swing.JComponent
 import javax.swing.event.TreeExpansionEvent
 import javax.swing.event.TreeExpansionListener
@@ -44,15 +49,29 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
             object : TreeExpansionListener {
                 override fun treeExpanded(event: TreeExpansionEvent) {
                     val node = event.path.lastPathComponent as? DefaultMutableTreeNode ?: return
-                    val payload = node.userObject as? RevisionsTreeNode.Category ?: return
-                    if (!payload.loaded) {
-                        loadCategory(node, payload.key)
+                    when (val payload = node.userObject) {
+                        is RevisionsTreeNode.Category ->
+                            if (!payload.loaded) loadCategory(node, payload.key)
+                        is RevisionsTreeNode.Revision ->
+                            if (!payload.filesLoaded) loadRevisionFiles(node, payload.model)
+                        else -> Unit
                     }
                 }
 
                 override fun treeCollapsed(event: TreeExpansionEvent) {}
             }
         )
+
+        object : DoubleClickListener() {
+                override fun onDoubleClick(event: MouseEvent): Boolean {
+                    val node =
+                        tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return false
+                    val payload = node.userObject as? RevisionsTreeNode.FileChange ?: return false
+                    ChangesetDiffOpener.open(project, payload.revision, payload.changeset)
+                    return true
+                }
+            }
+            .installOn(tree)
 
         // Listen for refreshes (e.g. via Refresh action / polling tick) and
         // reload categories the user has already expanded.
@@ -140,7 +159,12 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
                     node.add(emptyNode())
                 } else {
                     revisions.forEach { rev ->
-                        node.add(DefaultMutableTreeNode(RevisionsTreeNode.Revision(rev), true))
+                        // Preseed each revision with a Loading child so the
+                        // disclosure triangle appears immediately.
+                        val revisionNode =
+                            DefaultMutableTreeNode(RevisionsTreeNode.Revision(rev), true)
+                        revisionNode.add(loadingNode())
+                        node.add(revisionNode)
                     }
                 }
                 node.userObject = RevisionsTreeNode.Category(key, loaded = true)
@@ -149,6 +173,48 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
                 LOG.warn("Loading category $key failed", err)
                 node.add(errorNode(err.message ?: err.javaClass.simpleName))
                 node.userObject = RevisionsTreeNode.Category(key, loaded = false)
+            },
+        )
+        treeModel.reload(node)
+    }
+
+    private fun loadRevisionFiles(node: DefaultMutableTreeNode, model: RevisionModel) {
+        node.removeAllChildren()
+        node.add(loadingNode())
+        treeModel.reload(node)
+
+        val scope = PhabSessionService.getInstance().coroutineScope
+        scope.launch {
+            val changesets = runCatching { withContext(Dispatchers.IO) { model.getChangesets() } }
+            ApplicationManager.getApplication().invokeLater {
+                renderFiles(node, model, changesets)
+            }
+        }
+    }
+
+    private fun renderFiles(
+        node: DefaultMutableTreeNode,
+        model: RevisionModel,
+        changesetsResult: Result<List<Changeset>>,
+    ) {
+        node.removeAllChildren()
+        changesetsResult.fold(
+            onSuccess = { changesets ->
+                if (changesets.isEmpty()) {
+                    node.add(emptyNode())
+                } else {
+                    changesets.forEach { cs ->
+                        node.add(
+                            DefaultMutableTreeNode(RevisionsTreeNode.FileChange(model, cs), false)
+                        )
+                    }
+                }
+                node.userObject = RevisionsTreeNode.Revision(model, filesLoaded = true)
+            },
+            onFailure = { err ->
+                LOG.warn("Loading changesets for ${model.monogram} failed", err)
+                node.add(errorNode(err.message ?: err.javaClass.simpleName))
+                node.userObject = RevisionsTreeNode.Revision(model, filesLoaded = false)
             },
         )
         treeModel.reload(node)

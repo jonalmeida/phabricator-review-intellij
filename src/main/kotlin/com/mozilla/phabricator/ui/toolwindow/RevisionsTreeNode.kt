@@ -15,7 +15,16 @@ sealed interface RevisionsTreeNode {
             get() = key.label
     }
 
-    data class Revision(val model: RevisionModel) : RevisionsTreeNode
+    data class Revision(val model: RevisionModel, val filesLoaded: Boolean = false) :
+        RevisionsTreeNode
+
+    data class FileChange(
+        val revision: RevisionModel,
+        val changeset: com.mozilla.phabricator.conduit.model.Changeset,
+    ) : RevisionsTreeNode {
+        val path: String
+            get() = changeset.currentPath.ifEmpty { changeset.oldPath.orEmpty() }
+    }
 
     object Loading : RevisionsTreeNode
 
