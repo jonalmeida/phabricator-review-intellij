@@ -30,7 +30,15 @@
         <notificationGroup
             id="Mozilla Phabricator"
             displayType="BALLOON"/>
+        <projectService
+            serviceImplementation="com.mozilla.phabricator.service.RevisionsManager"/>
     </extensions>
+
+    <applicationListeners>
+        <listener
+            class="com.mozilla.phabricator.service.PhabricatorAppActivationListener"
+            topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+    </applicationListeners>
 
     <actions>
         <action
