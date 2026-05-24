@@ -11,7 +11,17 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!-- Services, tool window, configurable, etc. are added in later commits. -->
+        <applicationService
+            serviceImplementation="com.mozilla.phabricator.service.PhabricatorSettings"/>
+        <applicationService
+            serviceImplementation="com.mozilla.phabricator.service.CredentialStore"/>
+        <applicationService
+            serviceImplementation="com.mozilla.phabricator.service.PhabSessionService"/>
+        <applicationConfigurable
+            id="com.mozilla.phabricator.settings"
+            displayName="Mozilla Phabricator"
+            parentId="tools"
+            instance="com.mozilla.phabricator.ui.settings.PhabricatorConfigurable"/>
     </extensions>
 
     <actions>
