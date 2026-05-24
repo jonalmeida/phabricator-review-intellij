@@ -5,6 +5,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
 import com.mozilla.phabricator.conduit.ConduitClient
 import com.mozilla.phabricator.conduit.ConduitError
+import kotlinx.coroutines.CoroutineScope
 
 /**
  * Holds the authenticated [PhabSession] (if any) and exposes sign-in / sign-out flows. Equivalent
@@ -12,7 +13,7 @@ import com.mozilla.phabricator.conduit.ConduitError
  * secret-storage half here is delegated to [CredentialStore].
  */
 @Service(Service.Level.APP)
-class PhabSessionService {
+class PhabSessionService(val coroutineScope: CoroutineScope) {
 
     @Volatile private var current: PhabSession? = null
 

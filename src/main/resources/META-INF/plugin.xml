@@ -22,9 +22,26 @@
             displayName="Mozilla Phabricator"
             parentId="tools"
             instance="com.mozilla.phabricator.ui.settings.PhabricatorConfigurable"/>
+        <toolWindow
+            id="Phabricator"
+            anchor="right"
+            icon="/icons/phabricator.svg"
+            factoryClass="com.mozilla.phabricator.ui.toolwindow.PhabricatorToolWindowFactory"/>
+        <notificationGroup
+            id="Mozilla Phabricator"
+            displayType="BALLOON"/>
     </extensions>
 
     <actions>
-        <!-- Sign-in/out + refresh actions are added in later commits. -->
+        <action
+            id="Phabricator.SignIn"
+            class="com.mozilla.phabricator.actions.SignInAction"
+            text="Sign In to Mozilla Phabricator"
+            description="Sign in with a Conduit API token."/>
+        <action
+            id="Phabricator.SignOut"
+            class="com.mozilla.phabricator.actions.SignOutAction"
+            text="Sign Out of Mozilla Phabricator"
+            description="Forget the stored Conduit API token."/>
     </actions>
 </idea-plugin>
