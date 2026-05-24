@@ -3,6 +3,7 @@ import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.0.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
     id("org.jetbrains.intellij.platform") version "2.16.0"
     id("com.ncorti.ktfmt.gradle") version "0.23.0"
 }
@@ -35,6 +36,8 @@ dependencies {
         create(platformType, platformVersion)
         testFramework(TestFrameworkType.Platform)
     }
+
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     testImplementation(platform("org.junit:junit-bom:5.11.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
