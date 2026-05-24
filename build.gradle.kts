@@ -58,18 +58,25 @@ intellijPlatform {
     pluginVerification { ides { recommended() } }
 }
 
-tasks {
-    test { useJUnitPlatform { excludeTags("live") } }
+// The `live` JUnit tag is opt-in. It is included when the user invokes the
+// `liveTest` task (which simply re-routes through `test` with the right
+// include-tags) or passes -PincludeLive=true. We toggle by inspecting the
+// task graph before `test` is executed.
+val liveTestsRequested =
+    gradle.startParameter.taskNames.any { it == "liveTest" } ||
+        providers.gradleProperty("includeLive").orNull == "true"
 
-    register<Test>("liveTest") {
-        description = "Runs live integration tests against real Phabricator (reads .phabricator_token)."
+tasks {
+    test {
+        useJUnitPlatform { if (liveTestsRequested) includeTags("live") else excludeTags("live") }
+    }
+
+    register("liveTest") {
+        description =
+            "Runs the JUnit `live` tag — live integration tests against real Phabricator. " +
+                "Reads .phabricator_token from the repo root; skips when absent."
         group = "verification"
-        useJUnitPlatform {
-            includeTags("live")
-        }
-        testClassesDirs = sourceSets["test"].output.classesDirs
-        classpath = sourceSets["test"].runtimeClasspath
-        shouldRunAfter("test")
+        dependsOn(test)
     }
 
     wrapper { gradleVersion = "9.0.0" }
