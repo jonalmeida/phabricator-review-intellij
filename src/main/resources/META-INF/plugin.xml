@@ -1,0 +1,20 @@
+<idea-plugin>
+    <id>com.mozilla.phabricator</id>
+    <name>Mozilla Phabricator</name>
+    <vendor email="jalmeida@mozilla.com" url="https://github.com/jonalmeida/phabricator-review-intellij">Mozilla</vendor>
+
+    <description><![CDATA[
+        Browse and review Mozilla Phabricator differential revisions inside JetBrains IDEs.<br/>
+        <em>Port of the phabricator-review-vscode extension. Phase 1 ships read-only browsing.</em>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Services, tool window, configurable, etc. are added in later commits. -->
+    </extensions>
+
+    <actions>
+        <!-- Sign-in/out + refresh actions are added in later commits. -->
+    </actions>
+</idea-plugin>

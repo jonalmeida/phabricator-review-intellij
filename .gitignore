@@ -1,0 +1,25 @@
+# IntelliJ Platform / Gradle build artifacts
+/build/
+**/build/
+/.gradle/
+**/.gradle/
+/.intellijPlatform/
+/out/
+**/out/
+local.properties
+
+# IDE state
+/.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Local Claude harness state
+/.claude/settings.local.json
+
+# Phabricator Conduit token used by liveTest / manual e2e — never commit
+/.phabricator_token
