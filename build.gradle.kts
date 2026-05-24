@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("java")
@@ -25,6 +26,13 @@ val platformVersion = providers.gradleProperty("platformVersion").get()
 kotlin { jvmToolchain(javaVersion) }
 
 java { toolchain { languageVersion.set(JavaLanguageVersion.of(javaVersion)) } }
+
+// Treat compiler warnings as errors so they cannot slip into committed code.
+tasks.withType<KotlinCompile>().configureEach { compilerOptions { allWarningsAsErrors.set(true) } }
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf("-Werror", "-Xlint:all"))
+}
 
 repositories {
     mavenCentral()

@@ -2,6 +2,8 @@ package com.mozilla.phabricator.ui.toolwindow
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionUiKind
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.application.ApplicationManager
@@ -91,12 +93,15 @@ class RevisionsPanel(private val project: Project, private val parentDisposable:
 
     private fun invokeAction(actionId: String) {
         val action = ActionManager.getInstance().getAction(actionId) ?: return
-        ActionUtil.invokeAction(
-            action,
-            DataContext.EMPTY_CONTEXT,
-            "Phabricator.ToolWindow",
-            null,
-            null,
-        )
+        val event =
+            AnActionEvent.createEvent(
+                action,
+                DataContext.EMPTY_CONTEXT,
+                null,
+                "Phabricator.ToolWindow",
+                ActionUiKind.NONE,
+                null,
+            )
+        ActionUtil.invokeAction(action, event, null)
     }
 }

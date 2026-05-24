@@ -186,9 +186,7 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
         val scope = PhabSessionService.getInstance().coroutineScope
         scope.launch {
             val changesets = runCatching { withContext(Dispatchers.IO) { model.getChangesets() } }
-            ApplicationManager.getApplication().invokeLater {
-                renderFiles(node, model, changesets)
-            }
+            ApplicationManager.getApplication().invokeLater { renderFiles(node, model, changesets) }
         }
     }
 
