@@ -263,7 +263,7 @@ class RevisionsManager(
             .revisionsChanged(category)
     }
 
-    interface RefreshListener {
+    fun interface RefreshListener {
         fun revisionsChanged(category: CategoryKey?)
     }
 

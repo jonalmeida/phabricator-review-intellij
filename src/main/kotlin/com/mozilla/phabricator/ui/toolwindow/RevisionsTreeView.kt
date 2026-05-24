@@ -1,0 +1,162 @@
+package com.mozilla.phabricator.ui.toolwindow
+
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.project.Project
+import com.intellij.ui.ScrollPaneFactory
+import com.intellij.ui.treeStructure.Tree
+import com.mozilla.phabricator.service.PhabSessionService
+import com.mozilla.phabricator.service.RevisionsManager
+import com.mozilla.phabricator.service.RevisionsManager.CategoryKey
+import javax.swing.JComponent
+import javax.swing.event.TreeExpansionEvent
+import javax.swing.event.TreeExpansionListener
+import javax.swing.tree.DefaultMutableTreeNode
+import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreeSelectionModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Tree presenting the four revision categories. Children are loaded lazily the first time a
+ * category is expanded; subsequent expansions reuse the cache in [RevisionsManager] until a refresh
+ * clears it.
+ */
+class RevisionsTreeView(private val project: Project, parentDisposable: Disposable) {
+    private val root = DefaultMutableTreeNode("root")
+    private val treeModel = DefaultTreeModel(root)
+    private val tree =
+        Tree(treeModel).apply {
+            isRootVisible = false
+            showsRootHandles = true
+            selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
+            cellRenderer = RevisionsTreeCellRenderer()
+        }
+    private val categoryNodes = mutableMapOf<CategoryKey, DefaultMutableTreeNode>()
+
+    val component: JComponent = ScrollPaneFactory.createScrollPane(tree)
+
+    init {
+        rebuildCategories()
+        tree.addTreeExpansionListener(
+            object : TreeExpansionListener {
+                override fun treeExpanded(event: TreeExpansionEvent) {
+                    val node = event.path.lastPathComponent as? DefaultMutableTreeNode ?: return
+                    val payload = node.userObject as? RevisionsTreeNode.Category ?: return
+                    if (!payload.loaded) {
+                        loadCategory(node, payload.key)
+                    }
+                }
+
+                override fun treeCollapsed(event: TreeExpansionEvent) {}
+            }
+        )
+
+        // Listen for refreshes (e.g. via Refresh action / polling tick) and
+        // reload categories the user has already expanded.
+        ApplicationManager.getApplication()
+            .messageBus
+            .connect(parentDisposable)
+            .subscribe(
+                RevisionsManager.REFRESH_TOPIC,
+                RevisionsManager.RefreshListener { category ->
+                    ApplicationManager.getApplication().invokeLater { onRefresh(category) }
+                },
+            )
+    }
+
+    fun refreshAll() {
+        rebuildCategories()
+    }
+
+    private fun rebuildCategories() {
+        root.removeAllChildren()
+        categoryNodes.clear()
+        for (key in CategoryKey.entries) {
+            val node =
+                DefaultMutableTreeNode(RevisionsTreeNode.Category(key), true).apply {
+                    add(loadingNode())
+                }
+            categoryNodes[key] = node
+            root.add(node)
+        }
+        treeModel.reload(root)
+    }
+
+    private fun onRefresh(category: CategoryKey?) {
+        if (category == null) {
+            for ((key, node) in categoryNodes) {
+                val payload = node.userObject as RevisionsTreeNode.Category
+                if (
+                    payload.loaded &&
+                        tree.isExpanded(treeModel.getPathToRoot(node).let { TreePathOf(it) })
+                ) {
+                    loadCategory(node, key)
+                } else if (payload.loaded) {
+                    // Was loaded but not currently expanded -> invalidate so it reloads on next
+                    // expand.
+                    node.userObject = RevisionsTreeNode.Category(key, loaded = false)
+                    node.removeAllChildren()
+                    node.add(loadingNode())
+                    treeModel.reload(node)
+                }
+            }
+        } else {
+            val node = categoryNodes[category] ?: return
+            val payload = node.userObject as RevisionsTreeNode.Category
+            if (payload.loaded) {
+                loadCategory(node, category)
+            }
+        }
+    }
+
+    private fun loadCategory(node: DefaultMutableTreeNode, key: CategoryKey) {
+        node.removeAllChildren()
+        node.add(loadingNode())
+        treeModel.reload(node)
+
+        val scope = PhabSessionService.getInstance().coroutineScope
+        scope.launch {
+            val revisions = runCatching {
+                withContext(Dispatchers.IO) {
+                    RevisionsManager.getInstance(project).getRevisionsForCategory(key)
+                }
+            }
+            ApplicationManager.getApplication().invokeLater { renderCategory(node, key, revisions) }
+        }
+    }
+
+    private fun renderCategory(
+        node: DefaultMutableTreeNode,
+        key: CategoryKey,
+        revisionsResult: Result<List<com.mozilla.phabricator.service.RevisionModel>>,
+    ) {
+        node.removeAllChildren()
+        revisionsResult.fold(
+            onSuccess = { revisions ->
+                if (revisions.isEmpty()) {
+                    node.add(emptyNode())
+                } else {
+                    revisions.forEach { rev ->
+                        node.add(DefaultMutableTreeNode(RevisionsTreeNode.Revision(rev), true))
+                    }
+                }
+                node.userObject = RevisionsTreeNode.Category(key, loaded = true)
+            },
+            onFailure = { err ->
+                LOG.warn("Loading category $key failed", err)
+                node.add(errorNode(err.message ?: err.javaClass.simpleName))
+                node.userObject = RevisionsTreeNode.Category(key, loaded = false)
+            },
+        )
+        treeModel.reload(node)
+    }
+
+    companion object {
+        private val LOG = logger<RevisionsTreeView>()
+    }
+}
+
+private typealias TreePathOf = javax.swing.tree.TreePath

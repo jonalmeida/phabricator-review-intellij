@@ -21,19 +21,18 @@ import javax.swing.SwingConstants
  * Root component for the Phabricator tool window. Toggles between a signed-out prompt and a
  * signed-in placeholder; the actual revisions tree fills the signed-in body in commit 7.
  */
-class RevisionsPanel(
-    project: Project,
-    parentDisposable: Disposable,
-) : JPanel(BorderLayout()) {
+class RevisionsPanel(private val project: Project, private val parentDisposable: Disposable) :
+    JPanel(BorderLayout()) {
 
     private val statusLabel = JLabel("", SwingConstants.CENTER)
-    private val signInButton = JButton("Sign In").apply {
-        addActionListener { invokeAction("Phabricator.SignIn") }
-    }
-    private val signOutButton = JButton("Sign Out").apply {
-        addActionListener { invokeAction("Phabricator.SignOut") }
-    }
+    private val signInButton =
+        JButton("Sign In").apply { addActionListener { invokeAction("Phabricator.SignIn") } }
+    private val signOutButton =
+        JButton("Sign Out").apply { addActionListener { invokeAction("Phabricator.SignOut") } }
+    private val refreshButton =
+        JButton("Refresh").apply { addActionListener { invokeAction("Phabricator.Refresh") } }
     private val body = JPanel(BorderLayout())
+    private var treeView: RevisionsTreeView? = null
 
     init {
         border = JBUI.Borders.empty(8)
@@ -57,11 +56,13 @@ class RevisionsPanel(
         render(PhabSessionService.getInstance().session)
     }
 
-    private fun buildToolbar(): JPanel = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
-        add(statusLabel)
-        add(signInButton)
-        add(signOutButton)
-    }
+    private fun buildToolbar(): JPanel =
+        JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
+            add(statusLabel)
+            add(signInButton)
+            add(signOutButton)
+            add(refreshButton)
+        }
 
     private fun render(session: PhabSession?) {
         body.removeAll()
@@ -69,6 +70,8 @@ class RevisionsPanel(
             statusLabel.text = "Not signed in"
             signInButton.isVisible = true
             signOutButton.isVisible = false
+            refreshButton.isVisible = false
+            treeView = null
             body.add(
                 JLabel("Sign in to view Phabricator revisions.", SwingConstants.CENTER),
                 BorderLayout.CENTER,
@@ -77,14 +80,10 @@ class RevisionsPanel(
             statusLabel.text = "Signed in as ${session.userName}"
             signInButton.isVisible = false
             signOutButton.isVisible = true
-            body.add(
-                JLabel(
-                    "Revisions tree arrives in commit 7. " +
-                        "Use the Refresh action once it is wired up.",
-                    SwingConstants.CENTER,
-                ),
-                BorderLayout.CENTER,
-            )
+            refreshButton.isVisible = true
+            val view =
+                treeView ?: RevisionsTreeView(project, parentDisposable).also { treeView = it }
+            body.add(view.component, BorderLayout.CENTER)
         }
         body.revalidate()
         body.repaint()

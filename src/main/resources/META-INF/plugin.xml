@@ -51,5 +51,10 @@
             class="com.mozilla.phabricator.actions.SignOutAction"
             text="Sign Out of Mozilla Phabricator"
             description="Forget the stored Conduit API token."/>
+        <action
+            id="Phabricator.Refresh"
+            class="com.mozilla.phabricator.actions.RefreshRevisionsAction"
+            text="Refresh Revisions"
+            description="Re-fetch revisions in all categories."/>
     </actions>
 </idea-plugin>
