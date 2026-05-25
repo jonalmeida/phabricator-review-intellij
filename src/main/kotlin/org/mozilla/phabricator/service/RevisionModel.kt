@@ -1,8 +1,10 @@
 package org.mozilla.phabricator.service
 
+import com.intellij.openapi.application.ApplicationManager
 import kotlinx.coroutines.flow.toList
 import org.mozilla.phabricator.conduit.ConduitClient
 import org.mozilla.phabricator.conduit.model.Changeset
+import org.mozilla.phabricator.conduit.model.EditResult
 import org.mozilla.phabricator.conduit.model.Reviewer
 import org.mozilla.phabricator.conduit.model.Revision
 import org.mozilla.phabricator.conduit.model.Transaction
@@ -124,5 +126,56 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
 
     fun invalidateTransactions() {
         cachedTransactions = null
+    }
+
+    // ---------------------------------------------------- top-level write paths
+
+    /**
+     * Post a top-level comment. After the server confirms, invalidates the local transaction cache
+     * + fires [RevisionsManager.COMMENTS_TOPIC] so every open overview tab and diff viewer for this
+     *   revision refreshes. Body is sent verbatim -- the panel rejects empty bodies before we get
+     *   here.
+     */
+    suspend fun comment(body: String): EditResult {
+        val result = client.comment(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /**
+     * Accept the revision. Optional body posts as a follow-up comment in the same edit. Caller is
+     * responsible for the role check (isReviewer && !isAuthor) -- this method does not gate on it
+     * so it can be called from tests + future programmatic paths.
+     */
+    suspend fun accept(body: String? = null): EditResult {
+        val result = client.accept(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /**
+     * Request changes on the revision. Body is required by Phabricator convention but the wire call
+     * accepts null and the server returns the same edit shape; the panel's button enforces
+     * non-empty before calling.
+     */
+    suspend fun requestChanges(body: String? = null): EditResult {
+        val result = client.requestChanges(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Abandon the revision. Optional body posts as a follow-up comment in the same edit. */
+    suspend fun abandon(body: String? = null): EditResult {
+        val result = client.abandon(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    private fun signalCommentsChanged() {
+        // Local cache must invalidate before the bus fires so subscribers reload from a fresh
+        // server fetch rather than re-read the stale snapshot we just made out of date.
+        invalidateTransactions()
+        val app = ApplicationManager.getApplication() ?: return
+        app.messageBus.syncPublisher(RevisionsManager.COMMENTS_TOPIC).commentsChanged(phid)
     }
 }
