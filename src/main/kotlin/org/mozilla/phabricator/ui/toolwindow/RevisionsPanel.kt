@@ -4,8 +4,8 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUiKind
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.ex.ActionUtil
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.util.ui.JBUI
@@ -93,10 +93,16 @@ class RevisionsPanel(private val project: Project, private val parentDisposable:
 
     private fun invokeAction(actionId: String) {
         val action = ActionManager.getInstance().getAction(actionId) ?: return
+        // Must pass a DataContext that carries CommonDataKeys.PROJECT: RefreshRevisionsAction
+        // (and any future project-scoped action invoked from this panel) reads `e.project` and
+        // silently returns when it is null. The Sign In / Sign Out actions are application-
+        // scoped and would also work with EMPTY_CONTEXT, but the project-context form is harmless
+        // for them.
+        val dataContext = SimpleDataContext.getProjectContext(project)
         val event =
             AnActionEvent.createEvent(
                 action,
-                DataContext.EMPTY_CONTEXT,
+                dataContext,
                 null,
                 "Phabricator.ToolWindow",
                 ActionUiKind.NONE,
