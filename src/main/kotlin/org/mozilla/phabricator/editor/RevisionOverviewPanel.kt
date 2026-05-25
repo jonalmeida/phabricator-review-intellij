@@ -118,9 +118,23 @@ class RevisionOverviewPanel(
         column.add(
             OverviewMetadata.build(project, data).also { it.alignmentX = Component.LEFT_ALIGNMENT }
         )
+        column.add(sectionLabel("Files").also { it.alignmentX = Component.LEFT_ALIGNMENT })
+        column.add(
+            OverviewFilesList.build(project, data).also { it.alignmentX = Component.LEFT_ALIGNMENT }
+        )
+        column.add(sectionLabel("Activity").also { it.alignmentX = Component.LEFT_ALIGNMENT })
+        column.add(
+            OverviewActivityTimeline.build(data).also { it.alignmentX = Component.LEFT_ALIGNMENT }
+        )
         column.revalidate()
         column.repaint()
     }
+
+    private fun sectionLabel(text: String): JBLabel =
+        JBLabel(text).apply {
+            font = font.deriveFont(java.awt.Font.BOLD)
+            border = JBUI.Borders.empty(12, 0, 4, 0)
+        }
 
     private fun skeletonHeader(): JPanel =
         JPanel(BorderLayout()).apply {
