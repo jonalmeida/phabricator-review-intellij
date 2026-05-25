@@ -19,6 +19,7 @@ import org.mozilla.phabricator.conduit.model.ChangesetHunk
 import org.mozilla.phabricator.conduit.model.ChangesetType
 import org.mozilla.phabricator.conduit.model.ConduitSearchResult
 import org.mozilla.phabricator.conduit.model.Diff
+import org.mozilla.phabricator.conduit.model.Edge
 import org.mozilla.phabricator.conduit.model.EditResult
 import org.mozilla.phabricator.conduit.model.Project
 import org.mozilla.phabricator.conduit.model.QueriedDiff
@@ -28,11 +29,17 @@ import org.mozilla.phabricator.conduit.model.User
 import org.mozilla.phabricator.conduit.model.WhoAmI
 
 /**
- * Client over [ConduitTransport]. Ports the subset of
- * `phabricator-review-vscode/src/client/client.js` needed by Phases 1 and 2:
- * revision/diff/changeset browsing (Phase 1), plus inline-comment read/write (Phase 2:
- * searchTransactions, createInline, deleteInline, markInlineDone, publishDrafts, editRevision).
- * Top-level revision actions (comment / accept / reject / createRevision) land in Phase 3.
+ * Client over [ConduitTransport]. Ports the subset of `phabricator-review-vscode/src/client/client.js`
+ * needed by Phases 1-3:
+ * - Phase 1: revision / diff / changeset browsing (whoami, searchRevisions, getRevision*,
+ *   querySubscribedRevisionPHIDs, searchDiffs, queryDiffs, processRemarkup, resolveUsers /
+ *   resolveProjects / listProjectsForMember).
+ * - Phase 2: inline-comment read/write (searchTransactions, createInline, deleteInline,
+ *   markInlineDone, publishDrafts, editRevision).
+ * - Phase 3: top-level review actions (comment, accept, requestChanges, abandon) and
+ *   stack discovery via searchEdges.
+ *
+ * createRevision / updateRevision (submit-from-commit flow) land in Phase 4.
  */
 class ConduitClient(val transport: ConduitTransport) {
 
@@ -288,6 +295,98 @@ class ConduitClient(val transport: ConduitTransport) {
                     }
                 ),
         )
+
+    // ---------------------------------------------------- top-level review actions
+
+    /**
+     * Post a top-level (non-inline) comment on a revision. Equivalent of [client.js#comment]: a
+     * single `comment` transaction with the body as value.
+     */
+    suspend fun comment(revisionPHID: String, body: String): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions =
+                listOf(
+                    buildJsonObject {
+                        put("type", "comment")
+                        put("value", body)
+                    }
+                ),
+        )
+
+    /**
+     * Accept the revision. If [body] is non-null, also posts a comment in the same edit so the
+     * approval carries reviewer text. Mirrors [client.js#accept] — transaction shape is
+     * `[{type:"accept", value:true}, {type:"comment", value:body}]` (the comment entry is omitted
+     * when body is null or empty).
+     */
+    suspend fun accept(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "accept", body = body),
+        )
+
+    /**
+     * Request changes on a revision. Same shape as [accept] but with `type:"reject"`. Mirrors
+     * [client.js#requestChanges].
+     */
+    suspend fun requestChanges(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "reject", body = body),
+        )
+
+    /**
+     * Abandon your own revision. Optional body posts as a follow-up comment. Mirrors
+     * [client.js#abandon].
+     */
+    suspend fun abandon(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "abandon", body = body),
+        )
+
+    private fun actionTransactions(action: String, body: String?): List<JsonObject> {
+        val head = buildJsonObject {
+            put("type", action)
+            put("value", true)
+        }
+        if (body.isNullOrEmpty()) return listOf(head)
+        return listOf(
+            head,
+            buildJsonObject {
+                put("type", "comment")
+                put("value", body)
+            },
+        )
+    }
+
+    // -------------------------------------------------------------- edges (stack)
+
+    /**
+     * Walk the revision dependency graph for stack navigation. Mirrors [client.js#searchEdges]:
+     * accepts `sourcePHIDs` + `types` and returns a flat list of [Edge] entries. Non-paginated to
+     * match the JS client (Mozilla's instance pages the underlying endpoint but the JS plugin never
+     * bothers; if we ever need pagination, [Pagination.paginate] is the swap-in).
+     */
+    suspend fun searchEdges(sourcePHIDs: List<String>, types: List<String>): List<Edge> {
+        if (sourcePHIDs.isEmpty() || types.isEmpty()) return emptyList()
+        val args = buildJsonObject {
+            putJsonArray("sourcePHIDs") { sourcePHIDs.forEach { add(it) } }
+            putJsonArray("types") { types.forEach { add(it) } }
+        }
+        val result = call("edge.search", args) as? JsonObject ?: return emptyList()
+        val data = result["data"] as? JsonArray ?: return emptyList()
+        return data.mapNotNull { entry ->
+            val obj = entry as? JsonObject ?: return@mapNotNull null
+            val src = obj.optString("sourcePHID") ?: return@mapNotNull null
+            val tgt = obj.optString("destinationPHID") ?: return@mapNotNull null
+            val type = obj.optString("edgeType") ?: return@mapNotNull null
+            Edge(source = src, target = tgt, type = type)
+        }
+    }
+
+    // -------------------------------------------------------------- edit primitive
 
     /** Low-level edit endpoint. Mirrors [client.js#editRevision]. */
     suspend fun editRevision(objectIdentifier: String, transactions: List<JsonObject>): EditResult {
