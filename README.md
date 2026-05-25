@@ -33,3 +33,7 @@ If the file is missing, `liveTest` skips its tests via JUnit's `assumeTrue`.
 ## Target platform
 
 IntelliJ Platform 2024.3 (build 243.\*), Java 21, Kotlin 2.0.
+
+## License
+
+MPL-2.0. See the `LICENSE` file in the source tree.
