@@ -66,8 +66,11 @@ class PhabricatorDiffExtension : DiffExtension() {
                             renderThreads(
                                 project = project,
                                 threads = loaded.first,
+                                controller = loaded.second,
                                 beforeEditor = beforeEditor,
                                 afterEditor = afterEditor,
+                                viewerScope = viewerScope,
+                                request = request,
                             )
                         }
                     }
@@ -92,7 +95,15 @@ class PhabricatorDiffExtension : DiffExtension() {
                                 if (loaded != null) {
                                     clearGutters(beforeEditor)
                                     clearGutters(afterEditor)
-                                    renderThreads(project, loaded.first, beforeEditor, afterEditor)
+                                    renderThreads(
+                                        project = project,
+                                        threads = loaded.first,
+                                        controller = loaded.second,
+                                        beforeEditor = beforeEditor,
+                                        afterEditor = afterEditor,
+                                        viewerScope = viewerScope,
+                                        request = request,
+                                    )
                                 }
                             }
                         }
@@ -119,16 +130,28 @@ class PhabricatorDiffExtension : DiffExtension() {
     private fun renderThreads(
         project: Project,
         threads: List<InlineThread>,
+        controller: InlineCommentController,
         beforeEditor: EditorEx?,
         afterEditor: EditorEx?,
+        viewerScope: CoroutineScope,
+        request: DiffRequest,
     ) {
         for (thread in threads) {
             val target = if (thread.isNewFile) afterEditor else beforeEditor
-            target?.let { editor -> attachGutterFor(editor, thread, project) }
+            target?.let { editor ->
+                attachGutterFor(editor, thread, project, controller, viewerScope, request)
+            }
         }
     }
 
-    private fun attachGutterFor(editor: EditorEx, thread: InlineThread, project: Project) {
+    private fun attachGutterFor(
+        editor: EditorEx,
+        thread: InlineThread,
+        project: Project,
+        controller: InlineCommentController,
+        viewerScope: CoroutineScope,
+        request: DiffRequest,
+    ) {
         val lineIndex = (thread.line - 1).coerceAtLeast(0)
         val maxLine = editor.document.lineCount - 1
         if (maxLine < 0 || lineIndex > maxLine) return
@@ -141,12 +164,24 @@ class PhabricatorDiffExtension : DiffExtension() {
                 HighlighterTargetArea.EXACT_RANGE,
             )
         highlighter.gutterIconRenderer =
-            InlineCommentGutterRenderer(thread) {
+            InlineCommentGutterRenderer(thread) { threadAtClick ->
+                val diffId = request.getUserData(DiffRequestContextKeys.DIFF_ID)
                 InlineThreadPopup.show(
                     project = project,
-                    thread = it,
+                    thread = threadAtClick,
                     anchor = editor,
                     userResolver = null,
+                    scope = viewerScope,
+                    onReply = { body ->
+                        if (diffId == null) {
+                            error(
+                                "Diff id not yet resolved for this revision; try again in a moment."
+                            )
+                        } else {
+                            controller.postReply(threadAtClick, body, diffId)
+                        }
+                    },
+                    onMarkDone = { done -> controller.markDone(threadAtClick, done) },
                 )
             }
         highlighter.putUserData(PHAB_GUTTER, true)
