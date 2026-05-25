@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.mozilla.phabricator.common.EdtDispatcher
 import org.mozilla.phabricator.service.InlineCommentController
 import org.mozilla.phabricator.service.InlineThread
 import org.mozilla.phabricator.service.PhabSessionService
@@ -209,20 +210,5 @@ class PhabricatorDiffExtension : DiffExtension() {
         private val LOG = logger<PhabricatorDiffExtension>()
         private val PHAB_GUTTER =
             com.intellij.openapi.util.Key.create<Boolean>("phabricator.inlineGutter")
-
-        // EDT dispatcher equivalent — IntelliJ exposes Dispatchers.EDT in newer versions; we use
-        // a hand-rolled dispatcher to keep the surface minimal and avoid pinning to a specific
-        // platform-coroutines API version.
-        private val EdtDispatcher =
-            object : kotlinx.coroutines.MainCoroutineDispatcher() {
-                override val immediate = this
-
-                override fun dispatch(
-                    context: kotlin.coroutines.CoroutineContext,
-                    block: Runnable,
-                ) {
-                    ApplicationManager.getApplication().invokeLater(block)
-                }
-            }
     }
 }

@@ -20,7 +20,7 @@ class RevisionOverviewFileEditor(
     private val file: RevisionOverviewVirtualFile,
 ) : UserDataHolderBase(), FileEditor {
 
-    private val panel = RevisionOverviewPanel(project, file)
+    private val panel = RevisionOverviewPanel(project, file, parentDisposable = this)
 
     override fun getComponent(): JComponent = panel
 

@@ -3,6 +3,7 @@ package org.mozilla.phabricator.service
 import kotlinx.coroutines.flow.toList
 import org.mozilla.phabricator.conduit.ConduitClient
 import org.mozilla.phabricator.conduit.model.Changeset
+import org.mozilla.phabricator.conduit.model.Reviewer
 import org.mozilla.phabricator.conduit.model.Revision
 import org.mozilla.phabricator.conduit.model.Transaction
 
@@ -37,6 +38,31 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
 
     val diffPHID: String
         get() = current.fields.diffPHID
+
+    /** Human-friendly status (e.g. "Needs Review"). Falls back to the raw value when missing. */
+    val statusName: String
+        get() = current.fields.status.name.ifEmpty { current.fields.status.value }
+
+    /** Mozilla-Phabricator's linked Bugzilla bug id, e.g. "1234567"; null when unset. */
+    val bugzillaBugId: String?
+        get() = current.fields.bugzilla?.bugId?.takeIf { it.isNotEmpty() }
+
+    /** Reviewer rows from the attachments block, or empty list if the request never asked. */
+    val reviewers: List<Reviewer>
+        get() = current.attachments?.reviewers?.reviewers.orEmpty()
+
+    /** Subscriber PHIDs from the attachments block, or empty list if unfetched. */
+    val subscriberPHIDs: List<String>
+        get() = current.attachments?.subscribers?.subscriberPHIDs.orEmpty()
+
+    /** Project tag PHIDs from the attachments block, or empty list if unfetched. */
+    val projectPHIDs: List<String>
+        get() = current.attachments?.projects?.projectPHIDs.orEmpty()
+
+    fun isAuthor(viewerPHID: String): Boolean = viewerPHID.isNotEmpty() && viewerPHID == authorPHID
+
+    fun isReviewer(viewerPHID: String): Boolean =
+        viewerPHID.isNotEmpty() && reviewers.any { it.reviewerPHID == viewerPHID }
 
     @Volatile private var cachedChangesets: List<Changeset>? = null
     @Volatile private var cachedTransactions: List<Transaction>? = null

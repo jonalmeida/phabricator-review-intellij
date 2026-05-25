@@ -52,6 +52,9 @@ class RevisionsManager(
 
     @Volatile private var userResolver: UserResolver? = null
 
+    /** Cached PHID -> display-name / project metadata resolver. Null when signed out. */
+    fun getUserResolver(): UserResolver? = userResolver
+
     @Volatile private var projectMembership: List<String> = emptyList()
 
     @Volatile private var pollJob: Job? = null
