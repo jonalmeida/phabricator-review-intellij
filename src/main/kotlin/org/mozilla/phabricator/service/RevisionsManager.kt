@@ -268,6 +268,16 @@ class RevisionsManager(
         fun revisionsChanged(category: CategoryKey?)
     }
 
+    /**
+     * Per-revision comment-state change signal. Fires when a [RevisionModel] reloads transactions
+     * or when the inline-comment controller writes a new draft / done toggle / publish. The diff
+     * viewer's [org.mozilla.phabricator.diff] extension subscribes and reloads thread state in
+     * place — a coarser refresh on [REFRESH_TOPIC] would rebuild the entire tree.
+     */
+    fun interface CommentsListener {
+        fun commentsChanged(revisionPHID: String)
+    }
+
     companion object {
         const val DEFAULT_LIMIT = 100
         const val CLOSED_LIMIT = 25
@@ -279,6 +289,14 @@ class RevisionsManager(
         @Topic.AppLevel
         val REFRESH_TOPIC: Topic<RefreshListener> =
             Topic.create("Mozilla Phabricator revisions refresh", RefreshListener::class.java)
+
+        @JvmField
+        @Topic.AppLevel
+        val COMMENTS_TOPIC: Topic<CommentsListener> =
+            Topic.create(
+                "Mozilla Phabricator inline comments changed",
+                CommentsListener::class.java,
+            )
 
         private val LOG = logger<RevisionsManager>()
 

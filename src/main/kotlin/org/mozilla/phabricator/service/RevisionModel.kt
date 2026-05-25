@@ -1,13 +1,15 @@
 package org.mozilla.phabricator.service
 
+import kotlinx.coroutines.flow.toList
 import org.mozilla.phabricator.conduit.ConduitClient
 import org.mozilla.phabricator.conduit.model.Changeset
 import org.mozilla.phabricator.conduit.model.Revision
+import org.mozilla.phabricator.conduit.model.Transaction
 
 /**
- * Wraps a [Revision] DTO with cached, lazily-loaded changesets. Phase-1 surface only --
- * transactions, inline comments, edits, etc. land in Phase 2/3 along with the endpoints that supply
- * them.
+ * Wraps a [Revision] DTO with cached, lazily-loaded changesets and transactions. Phase 1 carried
+ * just the changeset cache; Phase 2 adds the transaction cache (the inline-comment UI builds
+ * threads on top of it).
  */
 class RevisionModel(initial: Revision, private val client: ConduitClient) {
     @Volatile private var current: Revision = initial
@@ -37,12 +39,24 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
         get() = current.fields.diffPHID
 
     @Volatile private var cachedChangesets: List<Changeset>? = null
+    @Volatile private var cachedTransactions: List<Transaction>? = null
 
+    /**
+     * Replace the wrapped [Revision]. Invalidates the changeset cache iff the underlying diff PHID
+     * actually changed (a new diff was uploaded); invalidates the transaction cache iff
+     * `dateModified` advanced (any new activity, including a comment posted elsewhere). Mirrors the
+     * conditional-invalidation in
+     * `phabricator-review-vscode/src/phabricator/revisionModel.ts:update`.
+     */
     fun update(latest: Revision) {
+        val previousDiffPHID = current.fields.diffPHID
+        val previousDateModified = current.fields.dateModified
         current = latest
-        // Invalidate downstream caches when the underlying diff changes.
-        if (latest.fields.diffPHID != current.fields.diffPHID) {
+        if (latest.fields.diffPHID != previousDiffPHID) {
             cachedChangesets = null
+        }
+        if (latest.fields.dateModified != previousDateModified) {
+            cachedTransactions = null
         }
     }
 
@@ -66,5 +80,23 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
 
     fun invalidateChangesets() {
         cachedChangesets = null
+    }
+
+    /**
+     * Fetch the revision's transaction timeline (activity feed). Cached per-instance until either
+     * `update()` brings in a newer `dateModified` or a comment-mutating call invokes
+     * [invalidateTransactions]. The list is sorted by `dateCreated` ascending.
+     */
+    suspend fun getTransactions(): List<Transaction> {
+        cachedTransactions?.let {
+            return it
+        }
+        val result = client.searchTransactions(phid).toList().sortedBy { it.dateCreated }
+        cachedTransactions = result
+        return result
+    }
+
+    fun invalidateTransactions() {
+        cachedTransactions = null
     }
 }
