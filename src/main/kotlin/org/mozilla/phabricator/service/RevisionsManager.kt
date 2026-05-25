@@ -160,22 +160,34 @@ class RevisionsManager(
         constraints: RevisionConstraints,
         limit: Int,
     ): List<Revision> {
-        val primary = fetchRevisions(session, constraints, limit)
-        if (primary.isNotEmpty()) return primary
-
-        // Phabricator legacy fallback: Mozilla's instance only surfaces
-        // subscribers via `differential.query`, not differential.revision.search.
-        return try {
-            val phids = session.client.querySubscribedRevisionPHIDs(session.userPHID, limit = limit)
-            if (phids.isEmpty()) return emptyList()
-            val orderIndex = phids.withIndex().associate { (i, phid) -> phid to i }
-            fetchRevisions(session, RevisionConstraints(phids = phids), limit).sortedBy {
-                orderIndex[it.phid] ?: 0
-            }
-        } catch (e: ConduitError) {
-            LOG.warn("differential.query fallback failed for Subscribed: ${e.code}")
-            primary
+        // Mozilla's Phabricator instance: `differential.revision.search` with
+        // `constraints.subscribers` only matches *direct* subscribers (users explicitly added
+        // via the Subscribers field). Indirect subscriptions (via reviewer roles, project
+        // memberships, "viewer is subscribed" toggles, etc.) are missing -- which is why a
+        // remote change to the Subscribed list was invisible until sign-out/sign-in: the same
+        // search runs on both refresh and sign-in, but the legacy `differential.query` endpoint
+        // (used here) reports the *full* subscription set the user actually sees in the web UI.
+        //
+        // Primary path: legacy differential.query.
+        // Fallback path: differential.revision.search (in case the legacy endpoint is deprecated
+        // on this instance and starts returning errors).
+        val phidsResult = runCatching {
+            session.client.querySubscribedRevisionPHIDs(session.userPHID, limit = limit)
         }
+
+        phidsResult
+            .onSuccess { phids ->
+                if (phids.isEmpty()) return emptyList()
+                val orderIndex = phids.withIndex().associate { (i, phid) -> phid to i }
+                return fetchRevisions(session, RevisionConstraints(phids = phids), limit).sortedBy {
+                    orderIndex[it.phid] ?: 0
+                }
+            }
+            .onFailure {
+                LOG.warn("differential.query failed for Subscribed, falling back to search: $it")
+            }
+
+        return fetchRevisions(session, constraints, limit)
     }
 
     private suspend fun onSignIn(session: PhabSession) {
