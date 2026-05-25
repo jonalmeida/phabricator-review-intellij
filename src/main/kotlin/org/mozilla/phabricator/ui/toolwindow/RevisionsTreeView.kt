@@ -6,6 +6,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.ScrollPaneFactory
+import com.intellij.ui.TreeSpeedSearch
 import com.intellij.ui.treeStructure.Tree
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
@@ -45,6 +46,7 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
 
     init {
         rebuildCategories()
+        installSpeedSearch()
         tree.addTreeExpansionListener(
             object : TreeExpansionListener {
                 override fun treeExpanded(event: TreeExpansionEvent) {
@@ -88,6 +90,32 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
 
     fun refreshAll() {
         rebuildCategories()
+    }
+
+    /**
+     * Native IntelliJ speed-search: typing characters in the tree narrows the visible nodes to
+     * those whose searchable text matches, the same UX as the Project view tree. The returned
+     * string is computed per-row from the node payload:
+     * - Category rows match on their human label ("My Active", "Needs My Review", ...).
+     * - Revision rows match on `Dxxxxx`, the title, and the status value, so typing either an id, a
+     *   substring of the title, or e.g. "accepted" filters the list.
+     * - File-change rows match on the file path.
+     * - Loading / Empty / Error placeholders are unsearchable (empty string) so they do not
+     *   distract while the user is typing.
+     */
+    private fun installSpeedSearch() {
+        TreeSpeedSearch.installOn(tree, /* canExpand= */ true) { treePath ->
+            val node = treePath.lastPathComponent as? DefaultMutableTreeNode ?: return@installOn ""
+            when (val payload = node.userObject) {
+                is RevisionsTreeNode.Category -> payload.label
+                is RevisionsTreeNode.Revision -> {
+                    val m = payload.model
+                    "${m.monogram} ${m.title} ${m.statusValue}"
+                }
+                is RevisionsTreeNode.FileChange -> payload.path
+                else -> ""
+            }
+        }
     }
 
     private fun rebuildCategories() {
