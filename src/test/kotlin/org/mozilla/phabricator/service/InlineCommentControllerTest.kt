@@ -115,40 +115,51 @@ class InlineCommentControllerTest {
     }
 
     @Test
-    fun `postReply fires createInline with the leaf comment as replyToCommentPHID`() = runBlocking {
-        val (transport, _, controller) = setup()
-        // Build a 3-comment thread by hand to avoid coupling to threadsFor in this test.
-        val thread =
-            InlineThread(
-                rootPHID = "PHID-XACT-1",
-                path = "src/a.kt",
-                line = 5,
-                length = 1,
-                isNewFile = true,
-                isDone = false,
-                comments =
-                    listOf(
-                        comment("PHID-XACT-1", body = "a"),
-                        comment("PHID-XACT-2", body = "b"),
-                        comment("PHID-XACT-3", body = "c"),
-                    ),
+    fun `postReply targets the leaf comment as replyTarget (server-side threading TBD)`() =
+        runBlocking {
+            val (transport, _, controller) = setup()
+            // Build a 3-comment thread by hand to avoid coupling to threadsFor in this test.
+            val thread =
+                InlineThread(
+                    rootPHID = "PHID-XACT-1",
+                    path = "src/a.kt",
+                    line = 5,
+                    length = 1,
+                    isNewFile = true,
+                    isDone = false,
+                    comments =
+                        listOf(
+                            comment("PHID-XACT-1", body = "a"),
+                            comment("PHID-XACT-2", body = "b"),
+                            comment("PHID-XACT-3", body = "c"),
+                        ),
+                )
+            transport.enqueueJson(
+                body = """{"result":{"phid":"PHID-XACT-new"},"error_code":null,"error_info":null}"""
             )
-        transport.enqueueJson(
-            body = """{"result":{"phid":"PHID-XACT-new"},"error_code":null,"error_info":null}"""
-        )
 
-        val newPhid = controller.postReply(thread, body = "lgtm", diffId = 7)
-        assertEquals("PHID-XACT-new", newPhid)
+            assertEquals(
+                "PHID-XACT-3",
+                thread.replyTargetPHID,
+                "controller must still target the leaf comment as the conceptual reply parent",
+            )
+            val newPhid = controller.postReply(thread, body = "lgtm", diffId = 7)
+            assertEquals("PHID-XACT-new", newPhid)
 
-        assertTrue(transport.calls[0].url.endsWith("differential.createinline"))
-        val params = decodeBody(transport.calls[0].body).params as JsonObject
-        assertEquals(7, params["diffID"]!!.jsonPrimitive.content.toInt())
-        assertEquals("src/a.kt", params["filePath"]!!.jsonPrimitive.content)
-        assertEquals(5, params["lineNumber"]!!.jsonPrimitive.content.toInt())
-        assertEquals("true", params["isNewFile"]!!.jsonPrimitive.content)
-        assertEquals("PHID-XACT-3", params["replyToCommentPHID"]!!.jsonPrimitive.content)
-        assertEquals("lgtm", params["content"]!!.jsonPrimitive.content)
-    }
+            assertTrue(transport.calls[0].url.endsWith("differential.createinline"))
+            val params = decodeBody(transport.calls[0].body).params as JsonObject
+            assertEquals(7, params["diffID"]!!.jsonPrimitive.content.toInt())
+            assertEquals("src/a.kt", params["filePath"]!!.jsonPrimitive.content)
+            assertEquals(5, params["lineNumber"]!!.jsonPrimitive.content.toInt())
+            assertEquals("true", params["isNewFile"]!!.jsonPrimitive.content)
+            assertEquals("lgtm", params["content"]!!.jsonPrimitive.content)
+            // Mozilla Phabricator rejects replyToCommentPHID; the Kotlin client must not send it.
+            assertEquals(
+                null,
+                params["replyToCommentPHID"],
+                "replyToCommentPHID must not be on the wire until the server supports it",
+            )
+        }
 
     @Test
     fun `markDone fires inline_done with every comment's transactionPHID`() = runBlocking {

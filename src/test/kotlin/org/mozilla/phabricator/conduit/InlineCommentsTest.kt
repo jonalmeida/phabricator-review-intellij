@@ -6,6 +6,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -75,28 +76,39 @@ class InlineCommentsTest {
     }
 
     @Test
-    fun `createInline accepts a replyToCommentPHID and passes it through`() = runBlocking {
-        val transport =
-            FakeHttpTransport().apply {
-                enqueueJson(
-                    body =
-                        """{"result":{"phid":"PHID-XACT-reply"},"error_code":null,"error_info":null}"""
-                )
-            }
-        val client = newClient(transport)
+    fun `createInline silently drops replyToCommentPHID (Mozilla Phabricator rejects it)`() =
+        runBlocking {
+            val transport =
+                FakeHttpTransport().apply {
+                    enqueueJson(
+                        body =
+                            """{"result":{"phid":"PHID-XACT-reply"},"error_code":null,"error_info":null}"""
+                    )
+                }
+            val client = newClient(transport)
 
-        client.createInline(
-            diffId = 9,
-            path = "src/x.kt",
-            line = 12,
-            isNewFile = true,
-            content = "agreed",
-            replyToCommentPHID = "PHID-XACT-parent",
-        )
+            client.createInline(
+                diffId = 9,
+                path = "src/x.kt",
+                line = 12,
+                isNewFile = true,
+                content = "agreed",
+                replyToCommentPHID = "PHID-XACT-parent",
+            )
 
-        val params = decodeBody(transport.calls[0].body).params as JsonObject
-        assertEquals("PHID-XACT-parent", params["replyToCommentPHID"]!!.jsonPrimitive.content)
-    }
+            // Server rejects the parameter; the Kotlin API accepts it for forwards
+            // compatibility but must NOT send it over the wire until a Phorge-side
+            // threading mechanism is identified.
+            val params = decodeBody(transport.calls[0].body).params as JsonObject
+            assertNull(
+                params["replyToCommentPHID"],
+                "replyToCommentPHID must not be sent (Mozilla Phabricator rejects it)",
+            )
+            // All other fields still flow through unchanged.
+            assertEquals("src/x.kt", params["filePath"]!!.jsonPrimitive.content)
+            assertEquals(12, params["lineNumber"]!!.jsonPrimitive.content.toInt())
+            assertEquals("agreed", params["content"]!!.jsonPrimitive.content)
+        }
 
     @Test
     fun `deleteInline posts the draft phid`() = runBlocking {

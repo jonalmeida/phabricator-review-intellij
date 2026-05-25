@@ -211,6 +211,13 @@ class ConduitClient(val transport: ConduitTransport) {
      * `lineLength=0`, a 3-line comment uses `lineLength=2`. We translate [length] (number of lines,
      * default 1) to that form to match `client.js#createInline`.
      *
+     * **Threading caveat:** the [replyToCommentPHID] parameter is *accepted on the Kotlin API* for
+     * forwards compatibility but is **not** sent over the wire. Mozilla's Phabricator instance
+     * rejects this parameter with `API Method "differential.createinline" does not define these
+     * parameters: 'replyToCommentPHID'` (the upstream JS plugin sends it too but apparently has not
+     * been live-tested against this server). Until the right Phorge-side mechanism for threading is
+     * identified, replies post as new top-level inlines on the same line.
+     *
      * @return The PHID of the newly created draft comment, or the empty string if the server
      *   response is unexpected.
      */
@@ -221,7 +228,7 @@ class ConduitClient(val transport: ConduitTransport) {
         isNewFile: Boolean,
         content: String,
         length: Int = 1,
-        replyToCommentPHID: String? = null,
+        @Suppress("UNUSED_PARAMETER") replyToCommentPHID: String? = null,
     ): String {
         val lineLength = maxOf(0, length - 1)
         val args = buildJsonObject {
@@ -231,7 +238,7 @@ class ConduitClient(val transport: ConduitTransport) {
             put("lineLength", lineLength)
             put("isNewFile", isNewFile)
             put("content", content)
-            replyToCommentPHID?.let { put("replyToCommentPHID", it) }
+            // replyToCommentPHID intentionally omitted; see kdoc.
         }
         val result = call("differential.createinline", args) as? JsonObject ?: return ""
         return result.optString("phid") ?: result.optString("id") ?: ""
