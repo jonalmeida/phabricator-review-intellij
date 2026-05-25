@@ -181,7 +181,6 @@ class PhabricatorDiffExtension : DiffExtension() {
                             controller.postReply(threadAtClick, body, diffId)
                         }
                     },
-                    onMarkDone = { done -> controller.markDone(threadAtClick, done) },
                 )
             }
         highlighter.putUserData(PHAB_GUTTER, true)

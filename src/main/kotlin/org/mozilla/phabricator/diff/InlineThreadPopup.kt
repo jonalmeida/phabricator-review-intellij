@@ -8,7 +8,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.ScrollPaneFactory
-import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
@@ -59,10 +58,9 @@ object InlineThreadPopup {
         userResolver: UserResolver?,
         scope: CoroutineScope,
         onReply: suspend (body: String) -> Unit,
-        onMarkDone: suspend (done: Boolean) -> Unit,
     ) {
         val popupRef = arrayOfNulls<JBPopup>(1)
-        val content = buildContent(thread, userResolver, scope, onReply, onMarkDone) { popupRef[0] }
+        val content = buildContent(thread, userResolver, scope, onReply) { popupRef[0] }
         val popup =
             JBPopupFactory.getInstance()
                 .createComponentPopupBuilder(content, content.preferredFocus)
@@ -90,7 +88,6 @@ object InlineThreadPopup {
         userResolver: UserResolver?,
         scope: CoroutineScope,
         onReply: suspend (body: String) -> Unit,
-        onMarkDone: suspend (done: Boolean) -> Unit,
         popupAccessor: () -> JBPopup?,
     ): PopupRoot {
         val comments = JPanel()
@@ -113,29 +110,11 @@ object InlineThreadPopup {
                     )
             }
 
-        val doneCheckbox =
-            JBCheckBox("Done", thread.isDone).apply {
-                addActionListener { evt ->
-                    val newState = isSelected
-                    isEnabled = false
-                    scope.launch {
-                        runCatching { onMarkDone(newState) }
-                            .onSuccess {
-                                ApplicationManager.getApplication().invokeLater { isEnabled = true }
-                            }
-                            .onFailure { err ->
-                                ApplicationManager.getApplication().invokeLater {
-                                    isSelected = !newState
-                                    isEnabled = true
-                                }
-                                notifyError(
-                                    "Mark done failed: ${err.message ?: err.javaClass.simpleName}"
-                                )
-                            }
-                    }
-                }
-            }
-
+        // The Done toggle was removed in Phase-2 bug 4: Mozilla Phabricator's
+        // differential.revision.edit rejects `inline.done` / `inline.undone` transactions
+        // ("Transaction with key \"0\" has invalid type ..."). The current Done state is still
+        // displayed in the popup title; flipping it requires the Phorge-side mechanism, which
+        // remains TBD.  [InlineCommentController.markDone] is preserved for when we find it.
         val replyArea =
             JBTextArea(5, 40).apply {
                 lineWrap = true
@@ -193,18 +172,10 @@ object InlineThreadPopup {
                 )
             }
 
-        val doneRow =
-            JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-                isOpaque = false
-                border = JBUI.Borders.empty(4, 8, 0, 8)
-                add(doneCheckbox)
-            }
-
         val root =
             PopupRoot(preferredFocus = replyArea).apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
                 add(commentsScroll)
-                add(doneRow)
                 add(replyRow)
             }
         return root
