@@ -14,6 +14,7 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
+import java.awt.Color
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.text.SimpleDateFormat
@@ -34,6 +35,8 @@ import kotlinx.coroutines.launch
 import org.mozilla.phabricator.service.InlineComment
 import org.mozilla.phabricator.service.InlineThread
 import org.mozilla.phabricator.service.UserResolver
+
+private const val TEXT_COLUMN_WIDTH = 480
 
 /**
  * Inline-comment thread popup with a reply composer + Done toggle.
@@ -68,7 +71,9 @@ object InlineThreadPopup {
                 .setMovable(true)
                 .setRequestFocus(true)
                 .setFocusable(true)
-                .setMinSize(Dimension(420, 320))
+                // Sized via component preferred sizes (set on the comments scroll and reply
+                // text area below); JBPopup grows vertically until the content fits.
+                .setMinSize(Dimension(TEXT_COLUMN_WIDTH + 40, 200))
                 .createPopup()
         popupRef[0] = popup
         popup.showInBestPositionFor(anchor)
@@ -96,9 +101,16 @@ object InlineThreadPopup {
             if (index > 0) comments.add(Box.createVerticalStrut(8))
             comments.add(buildCommentBlock(comment, userResolver))
         }
+        // Cap the comment list height so very long threads scroll, but let it shrink to fit
+        // short ones; the JEditorPane wraps at TEXT_COLUMN_WIDTH so the width is fixed.
         val commentsScroll =
             ScrollPaneFactory.createScrollPane(comments).apply {
                 border = BorderFactory.createEmptyBorder()
+                preferredSize =
+                    Dimension(
+                        TEXT_COLUMN_WIDTH + 24,
+                        comments.preferredSize.height.coerceAtMost(360),
+                    )
             }
 
         val doneCheckbox =
@@ -132,7 +144,7 @@ object InlineThreadPopup {
             }
         val replyScroll =
             ScrollPaneFactory.createScrollPane(replyArea).apply {
-                preferredSize = Dimension(420, 96)
+                preferredSize = Dimension(TEXT_COLUMN_WIDTH + 24, 96)
             }
 
         val replyButton =
@@ -191,7 +203,7 @@ object InlineThreadPopup {
         val root =
             PopupRoot(preferredFocus = replyArea).apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
-                add(commentsScroll.alsoSetSize(420, 200))
+                add(commentsScroll)
                 add(doneRow)
                 add(replyRow)
             }
@@ -212,9 +224,12 @@ object InlineThreadPopup {
             JEditorPane().apply {
                 contentType = "text/html"
                 isEditable = false
-                background = UIUtil.getEditorPaneBackground()
+                isOpaque = false
                 border = BorderFactory.createEmptyBorder()
-                text = comment.renderedHtml.ifEmpty { "<i>(empty)</i>" }
+                // The `width=` attribute on the <body> tag forces JEditorPane's HTMLEditorKit
+                // to wrap at that pixel width; combined with isOpaque=false + theme-aware
+                // foreground in the inline style, the popup honours the active IDE theme.
+                text = wrapWithThemeCss(comment.renderedHtml.ifEmpty { "<i>(empty)</i>" })
                 addHyperlinkListener { e ->
                     if (e.eventType == HyperlinkEvent.EventType.ACTIVATED) {
                         e.url?.toExternalForm()?.let { com.intellij.ide.BrowserUtil.browse(it) }
@@ -227,6 +242,13 @@ object InlineThreadPopup {
             add(body, BorderLayout.CENTER)
         }
     }
+
+    private fun wrapWithThemeCss(content: String): String {
+        val fg = cssColor(UIUtil.getLabelForeground())
+        return "<html><body width='$TEXT_COLUMN_WIDTH' style='font-family:sans-serif;color:$fg;margin:0;padding:0;'>$content</body></html>"
+    }
+
+    private fun cssColor(c: Color): String = "#%02x%02x%02x".format(c.red, c.green, c.blue)
 
     private fun notifyInfo(message: String) = notify(message, NotificationType.INFORMATION)
 
@@ -242,8 +264,3 @@ object InlineThreadPopup {
 
 /** Root component for the popup; exposes the field that should receive focus on open. */
 private class PopupRoot(val preferredFocus: JComponent) : JPanel()
-
-private fun JComponent.alsoSetSize(width: Int, height: Int): JComponent = apply {
-    preferredSize = Dimension(width, height)
-    maximumSize = Dimension(Int.MAX_VALUE, height)
-}
