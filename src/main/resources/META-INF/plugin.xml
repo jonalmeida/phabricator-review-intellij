@@ -32,6 +32,8 @@
             displayType="BALLOON"/>
         <projectService
             serviceImplementation="org.mozilla.phabricator.service.RevisionsManager"/>
+        <diff.DiffExtension
+            implementation="org.mozilla.phabricator.diff.PhabricatorDiffExtension"/>
     </extensions>
 
     <applicationListeners>
