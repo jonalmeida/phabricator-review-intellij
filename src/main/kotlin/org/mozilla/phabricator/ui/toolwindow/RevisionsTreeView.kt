@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mozilla.phabricator.conduit.model.Changeset
 import org.mozilla.phabricator.diff.ChangesetDiffOpener
+import org.mozilla.phabricator.editor.RevisionOverviewOpener
 import org.mozilla.phabricator.service.PhabSessionService
 import org.mozilla.phabricator.service.RevisionModel
 import org.mozilla.phabricator.service.RevisionsManager
@@ -68,9 +69,17 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
                 override fun onDoubleClick(event: MouseEvent): Boolean {
                     val node =
                         tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return false
-                    val payload = node.userObject as? RevisionsTreeNode.FileChange ?: return false
-                    ChangesetDiffOpener.open(project, payload.revision, payload.changeset)
-                    return true
+                    return when (val payload = node.userObject) {
+                        is RevisionsTreeNode.FileChange -> {
+                            ChangesetDiffOpener.open(project, payload.revision, payload.changeset)
+                            true
+                        }
+                        is RevisionsTreeNode.Revision -> {
+                            RevisionOverviewOpener.open(project, payload.model)
+                            true
+                        }
+                        else -> false
+                    }
                 }
             }
             .installOn(tree)

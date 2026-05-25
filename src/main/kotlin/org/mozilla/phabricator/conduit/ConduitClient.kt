@@ -29,15 +29,15 @@ import org.mozilla.phabricator.conduit.model.User
 import org.mozilla.phabricator.conduit.model.WhoAmI
 
 /**
- * Client over [ConduitTransport]. Ports the subset of `phabricator-review-vscode/src/client/client.js`
- * needed by Phases 1-3:
+ * Client over [ConduitTransport]. Ports the subset of
+ * `phabricator-review-vscode/src/client/client.js` needed by Phases 1-3:
  * - Phase 1: revision / diff / changeset browsing (whoami, searchRevisions, getRevision*,
  *   querySubscribedRevisionPHIDs, searchDiffs, queryDiffs, processRemarkup, resolveUsers /
  *   resolveProjects / listProjectsForMember).
  * - Phase 2: inline-comment read/write (searchTransactions, createInline, deleteInline,
  *   markInlineDone, publishDrafts, editRevision).
- * - Phase 3: top-level review actions (comment, accept, requestChanges, abandon) and
- *   stack discovery via searchEdges.
+ * - Phase 3: top-level review actions (comment, accept, requestChanges, abandon) and stack
+ *   discovery via searchEdges.
  *
  * createRevision / updateRevision (submit-from-commit flow) land in Phase 4.
  */

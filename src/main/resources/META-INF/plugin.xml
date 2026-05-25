@@ -34,6 +34,8 @@
             serviceImplementation="org.mozilla.phabricator.service.RevisionsManager"/>
         <diff.DiffExtension
             implementation="org.mozilla.phabricator.diff.PhabricatorDiffExtension"/>
+        <fileEditorProvider
+            implementation="org.mozilla.phabricator.editor.RevisionOverviewFileEditorProvider"/>
     </extensions>
 
     <applicationListeners>
