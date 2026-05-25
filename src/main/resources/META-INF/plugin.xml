@@ -58,5 +58,12 @@
             class="org.mozilla.phabricator.actions.RefreshRevisionsAction"
             text="Refresh Revisions"
             description="Re-fetch revisions in all categories."/>
+        <action
+            id="Phabricator.PublishDrafts"
+            class="org.mozilla.phabricator.actions.PublishDraftsAction"
+            text="Publish Phabricator Drafts"
+            description="Promote your pending draft inline comments on this revision to published.">
+            <add-to-group group-id="Diff.ViewerToolbar" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>
