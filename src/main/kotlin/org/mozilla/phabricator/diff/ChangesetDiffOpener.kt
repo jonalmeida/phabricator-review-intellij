@@ -1,9 +1,11 @@
 package org.mozilla.phabricator.diff
 
 import com.intellij.diff.DiffContentFactory
-import com.intellij.diff.DiffManager
+import com.intellij.diff.chains.SimpleDiffRequestChain
+import com.intellij.diff.editor.ChainDiffVirtualFile
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
@@ -13,12 +15,18 @@ import org.mozilla.phabricator.conduit.model.ChangesetFileType
 import org.mozilla.phabricator.conduit.model.ChangesetType
 import org.mozilla.phabricator.conduit.model.Diff
 import org.mozilla.phabricator.service.PhabSessionService
+import org.mozilla.phabricator.service.PhabricatorOpenViewsRegistry
 import org.mozilla.phabricator.service.RevisionModel
 
 /**
  * Opens IntelliJ's built-in diff viewer for a [Changeset]. Sides are synthesized from the hunk
  * corpus via [DiffSynthesizer]; file type is resolved from the path so syntax highlighting works
  * without touching the VirtualFileSystem.
+ *
+ * The diff opens as an editor tab (`ChainDiffVirtualFile` wrapping a `SimpleDiffRequestChain`)
+ * rather than via `DiffManager.showDiff` so the resulting [com.intellij.openapi.vfs.VirtualFile] is
+ * enumerable + closeable by [PhabricatorOpenViewsRegistry] on sign-out -- a user signing out would
+ * otherwise leave inert review buttons on a diff they can no longer submit comments on.
  *
  * Each request carries Phabricator context as user data ([DiffRequestContextKeys]); the
  * [PhabricatorDiffExtension] reads it to attach inline-comment gutters.
@@ -39,9 +47,7 @@ object ChangesetDiffOpener {
                     "Tip",
                 )
             attachPhabricatorContext(binaryRequest, revision, changeset)
-            ApplicationManager.getApplication().invokeLater {
-                DiffManager.getInstance().showDiff(project, binaryRequest)
-            }
+            openAsEditorTab(project, revision, changeset, binaryRequest)
             return
         }
 
@@ -58,8 +64,20 @@ object ChangesetDiffOpener {
                 sideTitle(revision, changeset, before = false),
             )
         attachPhabricatorContext(request, revision, changeset)
+        openAsEditorTab(project, revision, changeset, request)
+    }
+
+    private fun openAsEditorTab(
+        project: Project,
+        revision: RevisionModel,
+        changeset: Changeset,
+        request: SimpleDiffRequest,
+    ) {
+        val chain = SimpleDiffRequestChain(request)
+        val file = ChainDiffVirtualFile(chain, diffTitle(revision, changeset))
         ApplicationManager.getApplication().invokeLater {
-            DiffManager.getInstance().showDiff(project, request)
+            PhabricatorOpenViewsRegistry.getInstance(project).register(file)
+            FileEditorManager.getInstance(project).openFile(file, /* focusEditor= */ true)
         }
     }
 

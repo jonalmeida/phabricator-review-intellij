@@ -8,6 +8,7 @@ import com.intellij.openapi.util.UserDataHolderBase
 import com.intellij.openapi.vfs.VirtualFile
 import java.beans.PropertyChangeListener
 import javax.swing.JComponent
+import org.mozilla.phabricator.service.PhabricatorOpenViewsRegistry
 
 /**
  * FileEditor that hosts the [RevisionOverviewPanel] inside an IntelliJ editor tab.
@@ -45,6 +46,9 @@ class RevisionOverviewFileEditor(
     override fun getCurrentLocation(): FileEditorLocation? = null
 
     override fun dispose() {
-        // Commits 3+ will attach a CoroutineScope here and cancel it on dispose.
+        // Drop this file from the open-views registry so a subsequent close-all does not try to
+        // re-close it. The panel's CoroutineScope is cancelled separately via its own
+        // Disposer.register hook (RevisionOverviewPanel.init).
+        PhabricatorOpenViewsRegistry.getInstance(project).unregister(file)
     }
 }

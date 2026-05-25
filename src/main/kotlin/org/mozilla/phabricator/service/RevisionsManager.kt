@@ -212,6 +212,10 @@ class RevisionsManager(
         projectMembership = emptyList()
         stopPolling()
         publishRefresh(null)
+        // Close every Phabricator-managed editor tab so users do not get stranded with action
+        // toolbars + reply composers that can no longer talk to the server. The registry empties
+        // itself as each FileEditor disposes (drops its own registration in dispose()).
+        PhabricatorOpenViewsRegistry.getInstance(project).closeAll()
     }
 
     private suspend fun loadProjectMembership(client: ConduitClient, userPHID: String) {

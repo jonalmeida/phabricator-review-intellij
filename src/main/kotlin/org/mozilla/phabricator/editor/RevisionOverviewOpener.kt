@@ -2,6 +2,7 @@ package org.mozilla.phabricator.editor
 
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
+import org.mozilla.phabricator.service.PhabricatorOpenViewsRegistry
 import org.mozilla.phabricator.service.RevisionModel
 
 /**
@@ -18,6 +19,7 @@ object RevisionOverviewOpener {
                 monogram = revision.monogram,
                 title = revision.title.ifEmpty { revision.monogram },
             )
+        PhabricatorOpenViewsRegistry.getInstance(project).register(file)
         FileEditorManager.getInstance(project).openFile(file, /* focusEditor= */ true)
     }
 }
