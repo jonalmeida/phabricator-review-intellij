@@ -4,9 +4,9 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import kotlinx.coroutines.launch
 import org.mozilla.phabricator.service.PhabSessionService
 import org.mozilla.phabricator.service.RevisionsManager
-import kotlinx.coroutines.launch
 
 class RefreshRevisionsAction :
     AnAction(

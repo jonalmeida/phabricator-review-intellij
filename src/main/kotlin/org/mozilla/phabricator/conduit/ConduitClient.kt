@@ -1,16 +1,5 @@
 package org.mozilla.phabricator.conduit
 
-import org.mozilla.phabricator.conduit.model.Changeset
-import org.mozilla.phabricator.conduit.model.ChangesetFileType
-import org.mozilla.phabricator.conduit.model.ChangesetHunk
-import org.mozilla.phabricator.conduit.model.ChangesetType
-import org.mozilla.phabricator.conduit.model.ConduitSearchResult
-import org.mozilla.phabricator.conduit.model.Diff
-import org.mozilla.phabricator.conduit.model.Project
-import org.mozilla.phabricator.conduit.model.QueriedDiff
-import org.mozilla.phabricator.conduit.model.Revision
-import org.mozilla.phabricator.conduit.model.User
-import org.mozilla.phabricator.conduit.model.WhoAmI
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.Json
@@ -24,11 +13,26 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import org.mozilla.phabricator.conduit.model.Changeset
+import org.mozilla.phabricator.conduit.model.ChangesetFileType
+import org.mozilla.phabricator.conduit.model.ChangesetHunk
+import org.mozilla.phabricator.conduit.model.ChangesetType
+import org.mozilla.phabricator.conduit.model.ConduitSearchResult
+import org.mozilla.phabricator.conduit.model.Diff
+import org.mozilla.phabricator.conduit.model.EditResult
+import org.mozilla.phabricator.conduit.model.Project
+import org.mozilla.phabricator.conduit.model.QueriedDiff
+import org.mozilla.phabricator.conduit.model.Revision
+import org.mozilla.phabricator.conduit.model.Transaction
+import org.mozilla.phabricator.conduit.model.User
+import org.mozilla.phabricator.conduit.model.WhoAmI
 
 /**
- * Phase-1 read-only client over [ConduitTransport]. Ports the subset of
- * `phabricator-review-vscode/src/client/client.js` needed for browsing revisions and rendering
- * diffs. Write endpoints (comment, accept, createInline, createRevision, …) land in Phase 2/3.
+ * Client over [ConduitTransport]. Ports the subset of
+ * `phabricator-review-vscode/src/client/client.js` needed by Phases 1 and 2:
+ * revision/diff/changeset browsing (Phase 1), plus inline-comment read/write (Phase 2:
+ * searchTransactions, createInline, deleteInline, markInlineDone, publishDrafts, editRevision).
+ * Top-level revision actions (comment / accept / reject / createRevision) land in Phase 3.
  */
 class ConduitClient(val transport: ConduitTransport) {
 
@@ -177,6 +181,117 @@ class ConduitClient(val transport: ConduitTransport) {
                 )
         }
         return out
+    }
+
+    // ------------------------------------------------------- transactions / inlines
+
+    /**
+     * Paginated `transaction.search` for an object (revision PHID or monogram). Mirrors
+     * [client.js#searchTransactions]. Inline comments arrive as transactions whose `fields` carry
+     * `path`/`line`/`diffPHID` — see `InlineCommentFields.from` for the anchor extractor.
+     */
+    fun searchTransactions(objectIdentifier: String): Flow<Transaction> = paginate { after ->
+        val args = buildJsonObject {
+            put("objectIdentifier", objectIdentifier)
+            after?.let { put("after", it) }
+        }
+        JSON.decodeFromJsonElement(
+            ConduitSearchResult.serializer(Transaction.serializer()),
+            call("transaction.search", args),
+        )
+    }
+
+    /**
+     * Create a draft inline comment via the legacy `differential.createinline` endpoint.
+     * Phabricator stores it as a draft visible only to the author; it gets promoted to a published
+     * inline the next time the same user fires a revision-level transaction (comment/accept/reject)
+     * via `differential.revision.edit` — see [publishDrafts].
+     *
+     * Phabricator's `lineLength` is "additional lines after the first", so a 1-line comment uses
+     * `lineLength=0`, a 3-line comment uses `lineLength=2`. We translate [length] (number of lines,
+     * default 1) to that form to match `client.js#createInline`.
+     *
+     * @return The PHID of the newly created draft comment, or the empty string if the server
+     *   response is unexpected.
+     */
+    suspend fun createInline(
+        diffId: Int,
+        path: String,
+        line: Int,
+        isNewFile: Boolean,
+        content: String,
+        length: Int = 1,
+        replyToCommentPHID: String? = null,
+    ): String {
+        val lineLength = maxOf(0, length - 1)
+        val args = buildJsonObject {
+            put("diffID", diffId)
+            put("filePath", path)
+            put("lineNumber", line)
+            put("lineLength", lineLength)
+            put("isNewFile", isNewFile)
+            put("content", content)
+            replyToCommentPHID?.let { put("replyToCommentPHID", it) }
+        }
+        val result = call("differential.createinline", args) as? JsonObject ?: return ""
+        return result.optString("phid") ?: result.optString("id") ?: ""
+    }
+
+    /** Delete a draft inline by PHID. Only works on drafts owned by the authenticated user. */
+    suspend fun deleteInline(phid: String) {
+        val args = buildJsonObject { put("phid", phid) }
+        call("differential.deleteinline", args)
+    }
+
+    /**
+     * Toggle the `isDone` state on one or more inline comments via an `inline.done` /
+     * `inline.undone` transaction on `differential.revision.edit`. Mirrors
+     * [client.js#markInlineDone].
+     */
+    suspend fun markInlineDone(
+        revisionPHID: String,
+        commentPHIDs: List<String>,
+        done: Boolean = true,
+    ): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions =
+                listOf(
+                    buildJsonObject {
+                        put("type", if (done) "inline.done" else "inline.undone")
+                        putJsonArray("value") { commentPHIDs.forEach { add(it) } }
+                    }
+                ),
+        )
+
+    /**
+     * Publish the current user's pending draft inlines on a revision. Phabricator promotes drafts
+     * to published comments whenever the author fires any revision-level transaction; we use an
+     * empty-string `comment` transaction (the lightest no-op) to trigger that promotion without
+     * adding a top-level comment of our own.
+     */
+    suspend fun publishDrafts(revisionPHID: String): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions =
+                listOf(
+                    buildJsonObject {
+                        put("type", "comment")
+                        put("value", "")
+                    }
+                ),
+        )
+
+    /** Low-level edit endpoint. Mirrors [client.js#editRevision]. */
+    suspend fun editRevision(objectIdentifier: String, transactions: List<JsonObject>): EditResult {
+        val args = buildJsonObject {
+            put("objectIdentifier", objectIdentifier)
+            putJsonArray("transactions") { transactions.forEach { add(it) } }
+        }
+        return JSON.decodeFromJsonElement(
+            EditResult.serializer(),
+            call("differential.revision.edit", args),
+        )
     }
 
     // ------------------------------------------------------------- remarkup

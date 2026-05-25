@@ -1,13 +1,13 @@
 package org.mozilla.phabricator.diff
 
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import org.mozilla.phabricator.conduit.model.Changeset
 import org.mozilla.phabricator.conduit.model.ChangesetFileType
 import org.mozilla.phabricator.conduit.model.ChangesetHunk
 import org.mozilla.phabricator.conduit.model.ChangesetType
 import org.mozilla.phabricator.diff.DiffSynthesizer.Side
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
 
 /**
  * Ports the corpus-synthesis cases that the VSCode plugin tests via src/common/diffHunk.ts

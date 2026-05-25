@@ -7,12 +7,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.treeStructure.Tree
-import org.mozilla.phabricator.conduit.model.Changeset
-import org.mozilla.phabricator.diff.ChangesetDiffOpener
-import org.mozilla.phabricator.service.PhabSessionService
-import org.mozilla.phabricator.service.RevisionModel
-import org.mozilla.phabricator.service.RevisionsManager
-import org.mozilla.phabricator.service.RevisionsManager.CategoryKey
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
 import javax.swing.event.TreeExpansionEvent
@@ -23,6 +17,12 @@ import javax.swing.tree.TreeSelectionModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.mozilla.phabricator.conduit.model.Changeset
+import org.mozilla.phabricator.diff.ChangesetDiffOpener
+import org.mozilla.phabricator.service.PhabSessionService
+import org.mozilla.phabricator.service.RevisionModel
+import org.mozilla.phabricator.service.RevisionsManager
+import org.mozilla.phabricator.service.RevisionsManager.CategoryKey
 
 /**
  * Tree presenting the four revision categories. Children are loaded lazily the first time a

@@ -7,11 +7,11 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
+import kotlinx.coroutines.launch
 import org.mozilla.phabricator.conduit.ConduitError
 import org.mozilla.phabricator.service.PhabSessionService
 import org.mozilla.phabricator.service.PhabricatorSettings
 import org.mozilla.phabricator.ui.auth.SignInDialog
-import kotlinx.coroutines.launch
 
 class SignInAction : AnAction() {
 

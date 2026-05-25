@@ -4,9 +4,9 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.SimpleTextAttributes
-import org.mozilla.phabricator.conduit.model.ChangesetType
 import javax.swing.JTree
 import javax.swing.tree.DefaultMutableTreeNode
+import org.mozilla.phabricator.conduit.model.ChangesetType
 
 class RevisionsTreeCellRenderer : ColoredTreeCellRenderer() {
 

@@ -3,9 +3,9 @@ package org.mozilla.phabricator.service
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
+import kotlinx.coroutines.CoroutineScope
 import org.mozilla.phabricator.conduit.ConduitClient
 import org.mozilla.phabricator.conduit.ConduitError
-import kotlinx.coroutines.CoroutineScope
 
 /**
  * Holds the authenticated [PhabSession] (if any) and exposes sign-in / sign-out flows. Equivalent

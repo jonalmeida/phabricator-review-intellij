@@ -1,10 +1,10 @@
 package org.mozilla.phabricator.conduit
 
-import org.mozilla.phabricator.conduit.model.ConduitSearchResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.flow.take
+import org.mozilla.phabricator.conduit.model.ConduitSearchResult
 
 /**
  * Port of `src/client/pagination.js#paginate`. Walks a cursor-paged Conduit search method as a

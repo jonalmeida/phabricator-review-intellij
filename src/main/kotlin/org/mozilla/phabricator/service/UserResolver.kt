@@ -1,12 +1,12 @@
 package org.mozilla.phabricator.service
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.mozilla.phabricator.conduit.ConduitClient
 import org.mozilla.phabricator.conduit.PhidTypes
 import org.mozilla.phabricator.conduit.model.Project
 import org.mozilla.phabricator.conduit.model.User
 import org.mozilla.phabricator.conduit.phidType
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Caches resolved user/project PHIDs and exposes display-name helpers used by the tree view. Port

@@ -1,11 +1,11 @@
 package org.mozilla.phabricator.conduit
 
-import org.mozilla.phabricator.conduit.model.ConduitCursor
-import org.mozilla.phabricator.conduit.model.ConduitSearchResult
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.mozilla.phabricator.conduit.model.ConduitCursor
+import org.mozilla.phabricator.conduit.model.ConduitSearchResult
 
 /** Ports test/client/pagination.test.js. */
 class PaginationTest {

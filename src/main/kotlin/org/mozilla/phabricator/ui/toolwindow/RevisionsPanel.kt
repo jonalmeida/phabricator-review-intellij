@@ -9,15 +9,15 @@ import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.util.ui.JBUI
-import org.mozilla.phabricator.service.PhabSession
-import org.mozilla.phabricator.service.PhabSessionService
-import org.mozilla.phabricator.service.SessionListener
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import javax.swing.JButton
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingConstants
+import org.mozilla.phabricator.service.PhabSession
+import org.mozilla.phabricator.service.PhabSessionService
+import org.mozilla.phabricator.service.SessionListener
 
 /**
  * Root component for the Phabricator tool window. Toggles between a signed-out prompt and a

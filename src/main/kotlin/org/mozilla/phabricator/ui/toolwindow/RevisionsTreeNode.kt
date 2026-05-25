@@ -1,8 +1,8 @@
 package org.mozilla.phabricator.ui.toolwindow
 
+import javax.swing.tree.DefaultMutableTreeNode
 import org.mozilla.phabricator.service.RevisionModel
 import org.mozilla.phabricator.service.RevisionsManager.CategoryKey
-import javax.swing.tree.DefaultMutableTreeNode
 
 /**
  * Tree-node payloads. The model itself is the standard Swing [DefaultMutableTreeNode], so the type

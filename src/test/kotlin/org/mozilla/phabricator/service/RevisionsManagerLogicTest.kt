@@ -1,9 +1,9 @@
 package org.mozilla.phabricator.service
 
-import org.mozilla.phabricator.conduit.RevisionConstraints
-import org.mozilla.phabricator.service.RevisionsManager.Companion.ACTIVE_REVISION_STATUSES
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.mozilla.phabricator.conduit.RevisionConstraints
+import org.mozilla.phabricator.service.RevisionsManager.Companion.ACTIVE_REVISION_STATUSES
 
 /**
  * Pure-JVM tests for the constraint shapes used to populate each category. These are the exact

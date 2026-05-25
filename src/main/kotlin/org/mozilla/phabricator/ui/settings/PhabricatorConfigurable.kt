@@ -5,8 +5,8 @@ import com.intellij.ui.dsl.builder.bindIntText
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
-import org.mozilla.phabricator.service.PhabricatorSettings
 import javax.swing.JComponent
+import org.mozilla.phabricator.service.PhabricatorSettings
 
 /**
  * Settings UI shown at Settings → Tools → Mozilla Phabricator. Maps directly to the VSCode plugin's

@@ -5,11 +5,6 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
-import org.mozilla.phabricator.conduit.ConduitClient
-import org.mozilla.phabricator.conduit.ConduitError
-import org.mozilla.phabricator.conduit.RevisionAttachments
-import org.mozilla.phabricator.conduit.RevisionConstraints
-import org.mozilla.phabricator.conduit.collectList
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -18,6 +13,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.mozilla.phabricator.conduit.ConduitClient
+import org.mozilla.phabricator.conduit.ConduitError
+import org.mozilla.phabricator.conduit.RevisionAttachments
+import org.mozilla.phabricator.conduit.RevisionConstraints
+import org.mozilla.phabricator.conduit.collectList
 import org.mozilla.phabricator.conduit.model.Revision
 
 /**
