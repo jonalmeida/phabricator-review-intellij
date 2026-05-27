@@ -59,7 +59,14 @@ intellijPlatform {
         version = providers.gradleProperty("pluginVersion")
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
-            untilBuild = providers.gradleProperty("pluginUntilBuild")
+            // Treat an empty `pluginUntilBuild` as "no upper bound": skip setting
+            // the Property so patchPluginXml omits the `until-build` attribute
+            // from the generated plugin.xml. The IntelliJ Platform reads a
+            // missing `until-build` as compatible with every build >= sinceBuild.
+            val untilBuildProp = providers.gradleProperty("pluginUntilBuild").orNull
+            if (!untilBuildProp.isNullOrEmpty()) {
+                untilBuild = providers.gradleProperty("pluginUntilBuild")
+            }
         }
     }
 
