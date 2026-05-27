@@ -41,6 +41,12 @@ class RevisionsManager(
     enum class CategoryKey(val label: String) {
         MINE("My Active"),
         REVIEWER("Needs My Review"),
+        /**
+         * Strict subset of [REVIEWER]: only revisions where the *current viewer* is directly named
+         * as a reviewer (no project-membership expansion). Useful for triaging the
+         * actually-assigned-to-me queue separately from the broader team-review surface.
+         */
+        PERSONAL_REVIEW("My personal review"),
         SUBSCRIBER("Subscribed"),
         CLOSED("Recently Closed"),
     }
@@ -139,7 +145,11 @@ class RevisionsManager(
             }
 
         val filteredSource =
-            if (category == CategoryKey.REVIEWER) {
+            if (category == CategoryKey.REVIEWER || category == CategoryKey.PERSONAL_REVIEW) {
+                // The reviewer-queue categories must hide any revisions the viewer authored --
+                // Phabricator's web UI excludes them from "Needs Review" since the author cannot
+                // also be a reviewer, but the search endpoint still returns the row when the
+                // viewer happens to be on the reviewer list (e.g. an earlier reassignment).
                 revisions.filter { it.fields.authorPHID != activeSession.userPHID }
             } else {
                 revisions
@@ -272,6 +282,12 @@ class RevisionsManager(
             CategoryKey.REVIEWER ->
                 RevisionConstraints(
                     reviewerPHIDs = listOf(userPHID) + projectMembership,
+                    statuses = listOf("needs-review"),
+                )
+
+            CategoryKey.PERSONAL_REVIEW ->
+                RevisionConstraints(
+                    reviewerPHIDs = listOf(userPHID),
                     statuses = listOf("needs-review"),
                 )
 

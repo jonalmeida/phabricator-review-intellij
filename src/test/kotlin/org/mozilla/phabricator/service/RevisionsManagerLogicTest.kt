@@ -39,6 +39,20 @@ class RevisionsManagerLogicTest {
     }
 
     @Test
+    fun `PERSONAL_REVIEW constraints use only the viewer PHID under needs-review`() {
+        val c = personalReviewConstraints("PHID-USER-me")
+        assertEquals(
+            listOf("PHID-USER-me"),
+            c.reviewerPHIDs,
+            "PERSONAL_REVIEW must NOT expand to projectMembership; this is the distinguishing " +
+                "constraint that separates it from REVIEWER.",
+        )
+        assertEquals(listOf("needs-review"), c.statuses)
+        assertEquals(null, c.authorPHIDs)
+        assertEquals(null, c.subscribers)
+    }
+
+    @Test
     fun `SUBSCRIBER constraints use subscribers and active statuses`() {
         val c = subscriberConstraints("PHID-USER-me")
         assertEquals(listOf("PHID-USER-me"), c.subscribers)
@@ -72,6 +86,9 @@ class RevisionsManagerLogicTest {
             reviewerPHIDs = listOf(userPHID) + projectMembership,
             statuses = listOf("needs-review"),
         )
+
+    private fun personalReviewConstraints(userPHID: String) =
+        RevisionConstraints(reviewerPHIDs = listOf(userPHID), statuses = listOf("needs-review"))
 
     private fun subscriberConstraints(userPHID: String) =
         RevisionConstraints(subscribers = listOf(userPHID), statuses = ACTIVE_REVISION_STATUSES)
