@@ -21,6 +21,7 @@ import org.mozilla.phabricator.conduit.model.ConduitSearchResult
 import org.mozilla.phabricator.conduit.model.Diff
 import org.mozilla.phabricator.conduit.model.Edge
 import org.mozilla.phabricator.conduit.model.EditResult
+import org.mozilla.phabricator.conduit.model.PhidInfo
 import org.mozilla.phabricator.conduit.model.Project
 import org.mozilla.phabricator.conduit.model.QueriedDiff
 import org.mozilla.phabricator.conduit.model.Revision
@@ -398,6 +399,33 @@ class ConduitClient(val transport: ConduitTransport) {
             EditResult.serializer(),
             call("differential.revision.edit", args),
         )
+    }
+
+    // ------------------------------------------------------------- phid.query
+
+    /**
+     * Generic PHID lookup. Returns a map keyed by PHID with display metadata for every PHID the
+     * server recognises. Useful for resolving PHID types `user.search` / `project.search` do not
+     * cover -- notably application PHIDs like `PHID-APPS-PhabricatorHarbormasterApplication` which
+     * can appear as transaction authors when a Phabricator bot acts on a revision.
+     */
+    suspend fun queryPHIDs(phids: List<String>): Map<String, PhidInfo> {
+        if (phids.isEmpty()) return emptyMap()
+        val args = buildJsonObject { putJsonArray("phids") { phids.forEach { add(it) } } }
+        val result = call("phid.query", args) as? JsonObject ?: return emptyMap()
+        val out = mutableMapOf<String, PhidInfo>()
+        for ((phid, entry) in result) {
+            val obj = entry as? JsonObject ?: continue
+            out[phid] =
+                PhidInfo(
+                    phid = phid,
+                    name = obj.optString("name") ?: "",
+                    fullName = obj.optString("fullName") ?: "",
+                    typeName = obj.optString("typeName") ?: "",
+                    uri = obj.optString("uri"),
+                )
+        }
+        return out
     }
 
     // ------------------------------------------------------------- remarkup
