@@ -180,14 +180,34 @@ private fun AnchoredInline.body(): String = tx.comments.firstOrNull()?.content?.
 
 /**
  * Walk the [InlineCommentFields.replyToCommentPHID] chain to find each comment's root and group
- * replies under it. Mirrors `revisionCommentController.ts:groupReplies` (lines 349–371).
+ * replies under it. Mirrors `revisionCommentController.ts:groupReplies` (lines 349–371) but with
+ * one critical change: the parent lookup is keyed by *both* the inline transaction PHID
+ * (PHID-XACT-*) and every contained transaction-comment PHID (PHID-XCMT-*).
+ *
+ * Mozilla's Phabricator emits `replyToCommentPHID` pointing at the parent inline's XCMT
+ * (`transaction.comments[].phid`), not the XACT (`transaction.phid`). Indexing only by XACT --
+ * which is what the upstream VSCode plugin does -- causes the lookup to miss, every reply ends up
+ * classified as its own head, and a thread of N comments collapses to N separate one-comment
+ * "threads". On the diff popup that manifests as "only the first comment is visible" because
+ * multiple gutter highlighters stack on the same line and only the top icon's click handler fires.
+ * Indexing both forms resolves the chain regardless of which the server uses.
  *
  * Returns one [InlineThread] per root, comments sorted ascending by `dateCreated`. A thread is
  * marked [InlineThread.isDone] iff its root carries `isDone=true` — matches Phabricator's
  * thread-level Done state semantics.
  */
 internal fun groupReplies(anchored: List<Pair<AnchoredInline, InlineComment>>): List<InlineThread> {
-    val byTransactionPhid = anchored.associateBy { it.first.tx.phid }
+    // Index parents by every PHID that could legitimately appear as replyToCommentPHID:
+    // - tx.phid                    (XACT, upstream Phabricator convention)
+    // - tx.comments[].phid         (XCMT, what Mozilla Phabricator actually emits)
+    val byParentPhid = mutableMapOf<String, Pair<AnchoredInline, InlineComment>>()
+    for (item in anchored) {
+        byParentPhid[item.first.tx.phid] = item
+        for (c in item.first.tx.comments) {
+            byParentPhid[c.phid] = item
+        }
+    }
+
     val heads = mutableListOf<Pair<AnchoredInline, InlineComment>>()
     val replies = mutableMapOf<String, MutableList<Pair<AnchoredInline, InlineComment>>>()
 
@@ -196,9 +216,9 @@ internal fun groupReplies(anchored: List<Pair<AnchoredInline, InlineComment>>): 
         if (parent != null) {
             // Walk up to the root: chained replies share the head's bucket so we render a flat
             // thread rather than nested sub-threads.
-            var head: Pair<AnchoredInline, InlineComment>? = byTransactionPhid[parent]
+            var head: Pair<AnchoredInline, InlineComment>? = byParentPhid[parent]
             while (head?.first?.anchor?.replyToCommentPHID != null) {
-                head = byTransactionPhid[head.first.anchor.replyToCommentPHID!!]
+                head = byParentPhid[head.first.anchor.replyToCommentPHID!!]
             }
             val headPhid = head?.first?.tx?.phid ?: parent
             replies.getOrPut(headPhid) { mutableListOf() } += item

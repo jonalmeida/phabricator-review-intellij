@@ -87,6 +87,71 @@ class InlineCommentControllerTest {
     }
 
     @Test
+    fun `threadsFor groups replies when replyToCommentPHID points at the XCMT (Mozilla form)`() =
+        runBlocking {
+            val (transport, _, controller) = setup()
+            // Hand-built response: tx-2's replyToCommentPHID points at tx-1's COMMENT PHID
+            // (PHID-XCMT-1) rather than its transaction PHID. Mirrors what Mozilla's Phabricator
+            // emits. Pre-fix this lookup missed and tx-2 became its own one-comment thread.
+            transport.enqueueJson(
+                body =
+                    """
+                    {
+                      "result": {
+                        "data": [
+                          ${
+                              inlineTxWithComment(
+                                  txPhid = "PHID-XACT-1",
+                                  commentPhid = "PHID-XCMT-1",
+                                  date = 100,
+                                  body = "root",
+                                  parent = null,
+                              )
+                          },
+                          ${
+                              inlineTxWithComment(
+                                  txPhid = "PHID-XACT-2",
+                                  commentPhid = "PHID-XCMT-2",
+                                  date = 200,
+                                  body = "reply via XCMT",
+                                  parent = "PHID-XCMT-1",
+                              )
+                          },
+                          ${
+                              inlineTxWithComment(
+                                  txPhid = "PHID-XACT-3",
+                                  commentPhid = "PHID-XCMT-3",
+                                  date = 300,
+                                  body = "second reply via XCMT",
+                                  parent = "PHID-XCMT-2",
+                              )
+                          }
+                        ],
+                        "cursor": { "after": null }
+                      },
+                      "error_code": null,
+                      "error_info": null
+                    }
+                    """
+                        .trimIndent()
+            )
+            transport.enqueueJson(
+                body =
+                    """{"result":[{"content":"<p>root</p>"},{"content":"<p>reply via XCMT</p>"},{"content":"<p>second reply via XCMT</p>"}],"error_code":null,"error_info":null}"""
+            )
+
+            val threads = controller.threadsFor("src/a.kt", "PHID-DIFF-1")
+
+            assertEquals(1, threads.size, "three inlines must collapse into one thread")
+            val t = threads[0]
+            assertEquals("PHID-XACT-1", t.rootPHID)
+            assertEquals(
+                listOf("PHID-XACT-1", "PHID-XACT-2", "PHID-XACT-3"),
+                t.comments.map { it.transactionPHID },
+            )
+        }
+
+    @Test
     fun `threadsFor filters by changesetPath and diffPHID`() = runBlocking {
         val (transport, _, controller) = setup()
         transport.enqueueJson(body = transactionsBodyWithThreeRoots)
@@ -218,6 +283,59 @@ class InlineCommentControllerTest {
             rawBody = body,
             renderedHtml = body,
         )
+
+    /**
+     * Variant of [inlineTx] that lets the caller pick the embedded comment's PHID independently of
+     * the transaction PHID -- needed for the Mozilla-style "replyTo points at the XCMT" regression
+     * test.
+     */
+    private fun inlineTxWithComment(
+        txPhid: String,
+        commentPhid: String,
+        date: Long,
+        body: String,
+        parent: String?,
+        path: String = "src/a.kt",
+        line: Int = 1,
+    ): String =
+        buildJsonObject {
+                put("id", txPhid.substringAfterLast("-"))
+                put("phid", txPhid)
+                put("type", "inline")
+                put("authorPHID", "PHID-USER-a")
+                put("objectPHID", "PHID-DREV-1")
+                put("dateCreated", date)
+                put("dateModified", date)
+                put(
+                    "fields",
+                    buildJsonObject {
+                        put("diffPHID", "PHID-DIFF-1")
+                        put("path", path)
+                        put("line", line)
+                        put("length", 1)
+                        put("isNewFile", true)
+                        if (parent != null) put("replyToCommentPHID", parent)
+                        put("isDone", false)
+                    },
+                )
+                put(
+                    "comments",
+                    kotlinx.serialization.json.buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("phid", commentPhid)
+                                put("version", 1)
+                                put("authorPHID", "PHID-USER-a")
+                                put("dateCreated", date)
+                                put("dateModified", date)
+                                put("removed", false)
+                                put("content", buildJsonObject { put("raw", body) })
+                            }
+                        )
+                    },
+                )
+            }
+            .toString()
 
     private fun inlineTx(
         phid: String,
