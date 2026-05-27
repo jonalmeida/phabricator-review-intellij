@@ -125,6 +125,12 @@ class PhabricatorDiffExtension : DiffExtension() {
         val client = PhabSessionService.getInstance().session?.client ?: return null
         val controller = InlineCommentController(model, client)
         val threads = controller.threadsFor(changesetPath, diffPHID)
+        // Pre-resolve every comment author so the popup's UserResolver lookup hits a warm cache
+        // and renders display names rather than raw PHIDs. The resolver is shared with the
+        // tool-window tree, so this also benefits any subsequent activity-timeline render.
+        val resolver = RevisionsManager.getInstance(project).getUserResolver()
+        val authorPhids = threads.flatMap { t -> t.comments.map { it.authorPHID } }.toSet()
+        if (authorPhids.isNotEmpty()) resolver?.resolveMany(authorPhids)
         return threads to controller
     }
 
@@ -171,7 +177,10 @@ class PhabricatorDiffExtension : DiffExtension() {
                     project = project,
                     thread = threadAtClick,
                     anchor = editor,
-                    userResolver = null,
+                    // Use the project's shared resolver (pre-populated by loadThreads with every
+                    // comment-author PHID on this revision) so the popup header shows real
+                    // display names instead of raw PHID-USER-* identifiers.
+                    userResolver = RevisionsManager.getInstance(project).getUserResolver(),
                     scope = viewerScope,
                     onReply = { body ->
                         if (diffId == null) {
