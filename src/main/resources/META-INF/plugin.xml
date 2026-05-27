@@ -67,5 +67,19 @@
             description="Promote your pending draft inline comments on this revision to published.">
             <add-to-group group-id="Diff.ViewerToolbar" anchor="last"/>
         </action>
+        <action
+            id="Phabricator.CopyDifferentialId"
+            class="org.mozilla.phabricator.actions.CopyDifferentialIdAction"
+            text="Copy Differential ID"
+            description="Copy the Dxxxxx monogram to the clipboard."/>
+        <action
+            id="Phabricator.CopyBugzillaBugId"
+            class="org.mozilla.phabricator.actions.CopyBugzillaBugIdAction"
+            text="Copy Bug ID"
+            description="Copy 'Bug &lt;id&gt;' for the linked Bugzilla bug to the clipboard."/>
+        <group id="Phabricator.RevisionContextMenu">
+            <reference ref="Phabricator.CopyDifferentialId"/>
+            <reference ref="Phabricator.CopyBugzillaBugId"/>
+        </group>
     </actions>
 </idea-plugin>

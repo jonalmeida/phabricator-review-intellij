@@ -1,10 +1,14 @@
 package org.mozilla.phabricator.ui.toolwindow
 
+import com.intellij.ide.DataManager
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.DataProvider
+import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.ui.DoubleClickListener
+import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.TreeSpeedSearch
 import com.intellij.ui.treeStructure.Tree
@@ -18,6 +22,7 @@ import javax.swing.tree.TreeSelectionModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.mozilla.phabricator.actions.PhabricatorDataKeys
 import org.mozilla.phabricator.conduit.model.Changeset
 import org.mozilla.phabricator.diff.ChangesetDiffOpener
 import org.mozilla.phabricator.editor.RevisionOverviewOpener
@@ -48,6 +53,7 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
     init {
         rebuildCategories()
         installSpeedSearch()
+        installContextMenu()
         tree.addTreeExpansionListener(
             object : TreeExpansionListener {
                 override fun treeExpanded(event: TreeExpansionEvent) {
@@ -99,6 +105,38 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
 
     fun refreshAll() {
         rebuildCategories()
+    }
+
+    /**
+     * Wires the right-click context menu on revision rows. The menu is the action group
+     * `Phabricator.RevisionContextMenu` declared in plugin.xml; the tree publishes
+     * [PhabricatorDataKeys.SELECTED_REVISION_MODEL] (and
+     * [com.intellij.openapi.actionSystem.PlatformDataKeys.PROJECT]) via a [DataProvider] so the
+     * action `update()` / `actionPerformed()` callbacks can read the currently-selected revision
+     * without depending on a UI component.
+     *
+     * A click on a row pre-selects it so right-clicking an unselected row still acts on what the
+     * user clicked, matching the platform's Project View tree behaviour.
+     */
+    private fun installContextMenu() {
+        DataManager.registerDataProvider(tree, DataProvider { dataId -> resolveData(dataId) })
+        PopupHandler.installPopupMenu(tree, REVISION_CONTEXT_GROUP_ID, REVISION_CONTEXT_PLACE)
+    }
+
+    private fun resolveData(dataId: String): Any? =
+        when (dataId) {
+            PhabricatorDataKeys.SELECTED_REVISION_MODEL.name -> selectedRevisionModel()
+            PlatformDataKeys.PROJECT.name -> project
+            else -> null
+        }
+
+    private fun selectedRevisionModel(): RevisionModel? {
+        val node = tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return null
+        return when (val payload = node.userObject) {
+            is RevisionsTreeNode.Revision -> payload.model
+            is RevisionsTreeNode.FileChange -> payload.revision
+            else -> null
+        }
     }
 
     /**
@@ -257,6 +295,8 @@ class RevisionsTreeView(private val project: Project, parentDisposable: Disposab
 
     companion object {
         private val LOG = logger<RevisionsTreeView>()
+        private const val REVISION_CONTEXT_GROUP_ID = "Phabricator.RevisionContextMenu"
+        private const val REVISION_CONTEXT_PLACE = "PhabricatorRevisionTreePopup"
     }
 }
 
