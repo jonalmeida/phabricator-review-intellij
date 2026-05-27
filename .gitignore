@@ -6,6 +6,7 @@
 /.intellijPlatform/
 /out/
 **/out/
+.kotlin/
 local.properties
 
 # IDE state
