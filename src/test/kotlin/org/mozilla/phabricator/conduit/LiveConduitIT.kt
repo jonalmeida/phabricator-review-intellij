@@ -3,6 +3,7 @@ package org.mozilla.phabricator.conduit
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.mozilla.phabricator.conduit.model.Revision
 
 /**
  * Live integration tests that exercise real Mozilla Phabricator. Gated on a `.phabricator_token`
@@ -61,6 +63,38 @@ class LiveConduitIT {
             "expected D<num> monogram, got ${first.monogram}",
         )
         assertEquals(me.phid, first.fields.authorPHID)
+    }
+
+    @Test
+    fun `bugzilla bug id decodes from Mozilla's flat dotted key`() = runBlocking {
+        val token = requireToken()
+        val client = ConduitClient(token = token)
+        val me = client.whoami()
+        val revisions: List<Revision> =
+            client
+                .searchRevisions(
+                    constraints = RevisionConstraints(authorPHIDs = listOf(me.phid)),
+                    limit = 20,
+                )
+                .toList()
+        assumeTrue(
+            revisions.isNotEmpty(),
+            "authenticated user has no revisions to inspect bug-id decode",
+        )
+        // Mozilla's flow tags virtually every revision with a Bugzilla bug. If at least one of
+        // the user's recent revisions decodes a bug id, the @SerialName("bugzilla.bug-id") wiring
+        // is correct. If zero of the user's twenty most recent revisions had a bug linked the
+        // assumption fires instead of a failure.
+        val withBug = revisions.filter { !it.fields.bugzillaBugId.isNullOrEmpty() }
+        assumeTrue(
+            withBug.isNotEmpty(),
+            "none of the recent revisions has a bugzilla.bug-id; cannot assert decode",
+        )
+        val first = withBug.first()
+        assertTrue(
+            first.fields.bugzillaBugId!!.all { it.isDigit() },
+            "expected numeric bug id, got '${first.fields.bugzillaBugId}'",
+        )
     }
 
     @Test

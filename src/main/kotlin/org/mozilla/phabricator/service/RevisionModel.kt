@@ -47,7 +47,7 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
 
     /** Mozilla-Phabricator's linked Bugzilla bug id, e.g. "1234567"; null when unset. */
     val bugzillaBugId: String?
-        get() = current.fields.bugzilla?.bugId?.takeIf { it.isNotEmpty() }
+        get() = current.fields.bugzillaBugId?.takeIf { it.isNotEmpty() }
 
     /** Reviewer rows from the attachments block, or empty list if the request never asked. */
     val reviewers: List<Reviewer>

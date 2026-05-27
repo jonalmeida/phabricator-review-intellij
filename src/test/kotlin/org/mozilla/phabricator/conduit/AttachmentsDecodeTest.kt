@@ -37,7 +37,7 @@ class AttachmentsDecodeTest {
                                       "diffPHID": "PHID-DIFF-1",
                                       "dateCreated": 100,
                                       "dateModified": 200,
-                                      "bugzilla": { "bug-id": "1234567" }
+                                      "bugzilla.bug-id": "1234567"
                                     },
                                     "attachments": {
                                       "reviewers": {
@@ -88,7 +88,11 @@ class AttachmentsDecodeTest {
             assertEquals("PHID-USER-author", rev.fields.authorPHID)
             assertEquals("Example", rev.fields.title)
             assertEquals("needs-review", rev.fields.status.value)
-            assertEquals("1234567", rev.fields.bugzilla?.bugId, "bugzilla extension decoded")
+            assertEquals(
+                "1234567",
+                rev.fields.bugzillaBugId,
+                "bugzilla.bug-id flat dotted key decoded",
+            )
 
             // Phase 3 attachments block decoded.
             val a = rev.attachments
@@ -142,6 +146,6 @@ class AttachmentsDecodeTest {
 
         val rev = client.searchRevisions().toList().first()
         assertEquals(null, rev.attachments)
-        assertEquals(null, rev.fields.bugzilla)
+        assertEquals(null, rev.fields.bugzillaBugId)
     }
 }

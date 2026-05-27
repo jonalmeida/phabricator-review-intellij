@@ -1,5 +1,6 @@
 package org.mozilla.phabricator.conduit.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -35,11 +36,13 @@ data class RevisionFields(
     val dateCreated: Long = 0,
     val dateModified: Long = 0,
     /**
-     * Mozilla-Phabricator-specific extension: `bugzilla.bug-id` carries the linked Bugzilla bug
-     * number as a string. Phabricator stores it as `{ "bug-id": "12345" }` under a `bugzilla`
-     * sub-object on the fields block.
+     * Mozilla-Phabricator-specific extension. The Bugzilla custom field is emitted on
+     * `differential.revision.search` responses as a *flat dotted key* directly under `fields`:
+     * `"bugzilla.bug-id": "1234567"` -- not as a nested `bugzilla: { "bug-id": ... }` object.
+     * Verified empirically against the live Mozilla instance. The kotlinx-serialization
+     * [SerialName] is the literal JSON key, dots included.
      */
-    val bugzilla: BugzillaRef? = null,
+    @SerialName("bugzilla.bug-id") val bugzillaBugId: String? = null,
 )
 
 @Serializable
@@ -47,12 +50,6 @@ data class RevisionStatus(
     val value: String = "",
     val name: String = "",
     val closed: Boolean = false,
-)
-
-@Serializable
-data class BugzillaRef(
-    /** Stringified bug id, e.g. "1234567"; null when no bug is linked. */
-    @kotlinx.serialization.SerialName("bug-id") val bugId: String? = null
 )
 
 /**
