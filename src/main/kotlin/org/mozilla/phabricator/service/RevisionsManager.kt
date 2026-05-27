@@ -57,6 +57,15 @@ class RevisionsManager(
 
     @Volatile private var projectMembership: List<String> = emptyList()
 
+    /**
+     * Coroutine job that loads [projectMembership]. Set synchronously inside the SessionListener
+     * callback (before any subsequent code can race in) so `getRevisionsForCategory(REVIEWER)` can
+     * `.join()` on a non-null reference and never read an empty membership list. Without this
+     * synchronisation a user expanding "Needs My Review" right after sign-in would cache an
+     * under-counted result that only updated after the next manual Refresh.
+     */
+    @Volatile private var membershipLoadJob: Job? = null
+
     @Volatile private var pollJob: Job? = null
 
     init {
@@ -67,7 +76,16 @@ class RevisionsManager(
                 SessionListener.TOPIC,
                 object : SessionListener {
                     override fun signedIn(session: PhabSession) {
-                        coroutineScope.launch { onSignIn(session) }
+                        // Kick off projectMembership load SYNCHRONOUSLY from the listener callback
+                        // so any racing getRevisionsForCategory(REVIEWER) sees a non-null job to
+                        // join. The actual signed-in work runs as a separate coroutine that
+                        // joins the same job before publishing the refresh signal.
+                        val job =
+                            coroutineScope.launch {
+                                loadProjectMembership(session.client, session.userPHID)
+                            }
+                        membershipLoadJob = job
+                        coroutineScope.launch { onSignIn(session, job) }
                     }
 
                     override fun signedOut() {
@@ -76,10 +94,14 @@ class RevisionsManager(
                 },
             )
 
-        // If the session was restored before this service was constructed,
-        // catch up.
+        // If the session was restored before this service was constructed, catch up. Same
+        // synchronous-set-then-launch pattern as the signedIn listener so the race is closed
+        // for the restore path too.
         PhabSessionService.getInstance().session?.let { existing ->
-            coroutineScope.launch { onSignIn(existing) }
+            val job =
+                coroutineScope.launch { loadProjectMembership(existing.client, existing.userPHID) }
+            membershipLoadJob = job
+            coroutineScope.launch { onSignIn(existing, job) }
         }
     }
 
@@ -100,6 +122,12 @@ class RevisionsManager(
             }
 
         val activeSession = session ?: return emptyList()
+        // REVIEWER's constraint includes the user's projectMembership; await its (async) load
+        // so a tree-expand racing onSignIn doesn't cache an under-counted result. Other
+        // categories don't consult projectMembership and skip the join.
+        if (category == CategoryKey.REVIEWER) {
+            membershipLoadJob?.join()
+        }
         val constraints = constraintsFor(category, activeSession.userPHID) ?: return emptyList()
         val limit = if (category == CategoryKey.CLOSED) CLOSED_LIMIT else DEFAULT_LIMIT
 
@@ -190,14 +218,18 @@ class RevisionsManager(
         return fetchRevisions(session, constraints, limit)
     }
 
-    private suspend fun onSignIn(session: PhabSession) {
+    private suspend fun onSignIn(session: PhabSession, membershipJob: Job) {
         mutex.withLock {
             cache.clear()
             byPhid.clear()
             byId.clear()
         }
         userResolver = UserResolver(session.client)
-        loadProjectMembership(session.client, session.userPHID)
+        // Wait for the membership load (kicked off synchronously from the SessionListener
+        // callback so getRevisionsForCategory(REVIEWER) had a job to join). publishRefresh
+        // happens after the join so the tree's existing-expansion reload sees the right
+        // projectMembership.
+        membershipJob.join()
         startPolling()
         publishRefresh(null)
     }
@@ -210,6 +242,7 @@ class RevisionsManager(
         }
         userResolver = null
         projectMembership = emptyList()
+        membershipLoadJob = null
         stopPolling()
         publishRefresh(null)
         // Close every Phabricator-managed editor tab so users do not get stranded with action
