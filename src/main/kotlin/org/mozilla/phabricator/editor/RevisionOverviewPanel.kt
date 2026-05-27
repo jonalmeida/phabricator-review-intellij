@@ -129,7 +129,9 @@ class RevisionOverviewPanel(
         )
         column.add(sectionLabel("Activity").also { it.alignmentX = Component.LEFT_ALIGNMENT })
         column.add(
-            OverviewActivityTimeline.build(data).also { it.alignmentX = Component.LEFT_ALIGNMENT }
+            OverviewActivityTimeline.build(project, data).also {
+                it.alignmentX = Component.LEFT_ALIGNMENT
+            }
         )
         column.revalidate()
         column.repaint()
