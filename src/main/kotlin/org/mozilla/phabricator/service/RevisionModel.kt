@@ -171,6 +171,54 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
         return result
     }
 
+    /**
+     * Take over a revision authored by someone else. Caller is responsible for the role check
+     * (!isAuthor). Author transitions to reviewer; viewer becomes new author.
+     */
+    suspend fun commandeer(body: String? = null): EditResult {
+        val result = client.commandeer(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Resign as a reviewer. Caller is responsible for the role check (!isAuthor && isReviewer). */
+    suspend fun resign(body: String? = null): EditResult {
+        val result = client.resign(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Reclaim an abandoned revision the viewer authored. Caller gates on status == "abandoned". */
+    suspend fun reclaim(body: String? = null): EditResult {
+        val result = client.reclaim(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Reopen a closed (published) revision. Caller gates on status == "published". */
+    suspend fun reopen(body: String? = null): EditResult {
+        val result = client.reopen(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Move to the "changes planned" state. Caller gates on isAuthor + status == "needs-review". */
+    suspend fun planChanges(body: String? = null): EditResult {
+        val result = client.planChanges(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /**
+     * Re-request review after planning changes / addressing feedback / leaving draft. Caller gates
+     * on isAuthor + status in {needs-revision, changes-planned, draft}.
+     */
+    suspend fun requestReview(body: String? = null): EditResult {
+        val result = client.requestReview(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
     private fun signalCommentsChanged() {
         // Local cache must invalidate before the bus fires so subscribers reload from a fresh
         // server fetch rather than re-read the stale snapshot we just made out of date.

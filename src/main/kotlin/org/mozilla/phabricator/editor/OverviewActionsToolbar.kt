@@ -103,11 +103,114 @@ internal object OverviewActionsToolbar {
                     run(scope, composer, listOf(it)) { data.model.abandon(body) }
                         .also { _ -> notify("${data.model.monogram} abandoned") }
                 }
-                .apply { isEnabled = data.isAuthor }
+                .apply {
+                    isEnabled = data.isAuthor
+                    isVisible = data.isAuthor
+                }
+
+        // ----- Phase 4: the six remaining top-level actions.
+        // Visibility lifted from vscode/src/phabricator/revisionOverview.ts:1314-1340 for
+        // commandeer/resign; from Phabricator transaction semantics for the inferred four.
+        // We use isVisible rather than just isEnabled so the toolbar doesn't show greyed-out
+        // buttons the viewer can never act on -- matches the VSCode webview which only renders
+        // buttons that match the current state.
+        val status = data.model.statusValue
+        val commandeerButton =
+            button("Commandeer") {
+                    val confirmed =
+                        Messages.showYesNoDialog(
+                            project,
+                            "Take over ${data.model.monogram} from its author? " +
+                                "You will become the new author; the previous author moves to reviewer.",
+                            "Commandeer Revision",
+                            Messages.getWarningIcon(),
+                        ) == Messages.YES
+                    if (!confirmed) return@button
+                    val body = composer.text.trim().ifEmpty { null }
+                    run(scope, composer, listOf(it)) { data.model.commandeer(body) }
+                        .also { _ -> notify("${data.model.monogram} commandeered") }
+                }
+                .apply { isVisible = !data.isAuthor }
+
+        val resignButton =
+            button("Resign") {
+                    val confirmed =
+                        Messages.showYesNoDialog(
+                            project,
+                            "Resign from reviewing ${data.model.monogram}?",
+                            "Resign As Reviewer",
+                            Messages.getQuestionIcon(),
+                        ) == Messages.YES
+                    if (!confirmed) return@button
+                    val body = composer.text.trim().ifEmpty { null }
+                    run(scope, composer, listOf(it)) { data.model.resign(body) }
+                        .also { _ -> notify("Resigned from ${data.model.monogram}") }
+                }
+                .apply { isVisible = !data.isAuthor && data.isReviewer }
+
+        val reclaimButton =
+            button("Reclaim") {
+                    val confirmed =
+                        Messages.showYesNoDialog(
+                            project,
+                            "Reclaim ${data.model.monogram}? It will move back to needs-review.",
+                            "Reclaim Revision",
+                            Messages.getQuestionIcon(),
+                        ) == Messages.YES
+                    if (!confirmed) return@button
+                    val body = composer.text.trim().ifEmpty { null }
+                    run(scope, composer, listOf(it)) { data.model.reclaim(body) }
+                        .also { _ -> notify("${data.model.monogram} reclaimed") }
+                }
+                .apply { isVisible = data.isAuthor && status == "abandoned" }
+
+        val reopenButton =
+            button("Reopen") {
+                    val confirmed =
+                        Messages.showYesNoDialog(
+                            project,
+                            "Reopen ${data.model.monogram}?",
+                            "Reopen Revision",
+                            Messages.getQuestionIcon(),
+                        ) == Messages.YES
+                    if (!confirmed) return@button
+                    val body = composer.text.trim().ifEmpty { null }
+                    run(scope, composer, listOf(it)) { data.model.reopen(body) }
+                        .also { _ -> notify("${data.model.monogram} reopened") }
+                }
+                .apply { isVisible = status == "published" }
+
+        val planChangesButton =
+            button("Plan Changes") {
+                    // Optional-body composer path (same shape as Accept) -- no confirm dialog,
+                    // the action is non-destructive and easily reversible via Request Review.
+                    val body = composer.text.trim().ifEmpty { null }
+                    run(scope, composer, listOf(it)) { data.model.planChanges(body) }
+                        .also { _ -> notify("${data.model.monogram} moved to changes planned") }
+                }
+                .apply { isVisible = data.isAuthor && status == "needs-review" }
+
+        val requestReviewButton =
+            button("Request Review") {
+                    val body = composer.text.trim().ifEmpty { null }
+                    run(scope, composer, listOf(it)) { data.model.requestReview(body) }
+                        .also { _ -> notify("Re-requested review on ${data.model.monogram}") }
+                }
+                .apply {
+                    isVisible =
+                        data.isAuthor &&
+                            status in setOf("needs-revision", "changes-planned", "draft")
+                }
 
         buttonRow.add(commentButton)
         buttonRow.add(acceptButton)
         buttonRow.add(requestChangesButton)
+        buttonRow.add(planChangesButton)
+        buttonRow.add(requestReviewButton)
+        buttonRow.add(commandeerButton)
+        buttonRow.add(resignButton)
+        buttonRow.add(reclaimButton)
+        buttonRow.add(reopenButton)
         buttonRow.add(abandonButton)
 
         column.add(JBLabel("Reply (used as the comment body for the action you choose):"))
