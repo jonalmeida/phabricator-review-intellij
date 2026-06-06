@@ -2,8 +2,10 @@ package org.mozilla.phabricator.service
 
 import com.intellij.openapi.application.ApplicationManager
 import kotlinx.coroutines.flow.toList
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import org.mozilla.phabricator.conduit.ConduitClient
 import org.mozilla.phabricator.conduit.model.Changeset
 import org.mozilla.phabricator.conduit.model.EditResult
@@ -263,6 +265,43 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
                         buildJsonObject {
                             put("type", "summary")
                             put("value", value)
+                        }
+                    ),
+            )
+        signalCommentsChanged()
+        return result
+    }
+
+    /**
+     * Add reviewers by PHID. Caller gates on isAuthor. Wire shape: `{type: "reviewers.add", value:
+     * [phids]}`.
+     */
+    suspend fun addReviewers(phids: List<String>): EditResult {
+        val result =
+            client.editRevision(
+                objectIdentifier = phid,
+                transactions =
+                    listOf(
+                        buildJsonObject {
+                            put("type", "reviewers.add")
+                            putJsonArray("value") { phids.forEach { add(it) } }
+                        }
+                    ),
+            )
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Remove reviewers by PHID. Caller gates on isAuthor (or self-removal of a single phid). */
+    suspend fun removeReviewers(phids: List<String>): EditResult {
+        val result =
+            client.editRevision(
+                objectIdentifier = phid,
+                transactions =
+                    listOf(
+                        buildJsonObject {
+                            put("type", "reviewers.remove")
+                            putJsonArray("value") { phids.forEach { add(it) } }
                         }
                     ),
             )

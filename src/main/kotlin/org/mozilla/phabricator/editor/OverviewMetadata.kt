@@ -24,7 +24,7 @@ internal object OverviewMetadata {
                 isOpaque = false
             }
 
-        addSection(column, "Reviewers", reviewersPanel(data))
+        addSection(column, "Reviewers", reviewersPanel(project, data, scope))
         addSection(column, "Projects", projectsPanel(data))
         if (data.stackParents.isNotEmpty() || data.stackChildren.isNotEmpty()) {
             addSection(column, "Stack", stackPanel(project, data))
@@ -90,7 +90,11 @@ internal object OverviewMetadata {
         scope.launch { runCatching { save(newValue) } }
     }
 
-    private fun reviewersPanel(data: OverviewData): JPanel {
+    private fun reviewersPanel(
+        project: Project,
+        data: OverviewData,
+        scope: CoroutineScope,
+    ): JPanel {
         val rows =
             JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -102,21 +106,70 @@ internal object OverviewMetadata {
                     foreground = com.intellij.util.ui.UIUtil.getInactiveTextColor()
                 }
             )
-            return rows
+        } else {
+            data.reviewers.forEach { reviewer ->
+                val row = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply { isOpaque = false }
+                val name = "${if (reviewer.isProject) "#" else ""}${reviewer.displayName}"
+                row.add(JBLabel(name))
+                val tag = StringBuilder(reviewerStatusLabel(reviewer.status))
+                if (reviewer.isBlocking) tag.append(" · blocking")
+                row.add(
+                    JBLabel(tag.toString()).apply {
+                        foreground = com.intellij.util.ui.UIUtil.getInactiveTextColor()
+                    }
+                )
+                // X icon -- visible when the viewer can remove this reviewer (author can remove
+                // anyone; a reviewer can remove themselves to fast-path a Resign).
+                val canRemove = data.isAuthor || reviewer.phid == data.viewerPHID
+                if (canRemove) {
+                    row.add(
+                        OverviewHeader.editPencil(
+                            "Remove ${reviewer.displayName}",
+                            com.intellij.icons.AllIcons.Actions.Close,
+                        ) {
+                            val confirmed =
+                                com.intellij.openapi.ui.Messages.showYesNoDialog(
+                                    project,
+                                    "Remove ${reviewer.displayName} as a reviewer?",
+                                    "Remove Reviewer",
+                                    com.intellij.openapi.ui.Messages.getQuestionIcon(),
+                                ) == com.intellij.openapi.ui.Messages.YES
+                            if (!confirmed) return@editPencil
+                            scope.launch {
+                                runCatching { data.model.removeReviewers(listOf(reviewer.phid)) }
+                            }
+                        }
+                    )
+                }
+                row.alignmentX = Component.LEFT_ALIGNMENT
+                rows.add(row)
+            }
         }
-        data.reviewers.forEach { reviewer ->
-            val row = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply { isOpaque = false }
-            val name = "${if (reviewer.isProject) "#" else ""}${reviewer.displayName}"
-            row.add(JBLabel(name))
-            val tag = StringBuilder(reviewerStatusLabel(reviewer.status))
-            if (reviewer.isBlocking) tag.append(" · blocking")
-            row.add(
-                JBLabel(tag.toString()).apply {
-                    foreground = com.intellij.util.ui.UIUtil.getInactiveTextColor()
+        // Author always sees a "+ Add Reviewer" affordance below the chip rows.
+        if (data.isAuthor) {
+            val client = RevisionsManager.getInstance(project).session?.client
+            val addRow = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply { isOpaque = false }
+            val addLabel =
+                JBLabel(com.intellij.icons.AllIcons.General.Add).apply {
+                    text = "Add reviewer"
+                    iconTextGap = 4
+                    cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+                }
+            addLabel.addMouseListener(
+                object : java.awt.event.MouseAdapter() {
+                    override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                        val c = client ?: return
+                        ReviewerPicker.show(addLabel, c, scope) { user ->
+                            scope.launch {
+                                runCatching { data.model.addReviewers(listOf(user.phid)) }
+                            }
+                        }
+                    }
                 }
             )
-            row.alignmentX = Component.LEFT_ALIGNMENT
-            rows.add(row)
+            addRow.add(addLabel)
+            addRow.alignmentX = Component.LEFT_ALIGNMENT
+            rows.add(addRow)
         }
         return rows
     }

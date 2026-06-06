@@ -94,7 +94,10 @@ internal object OverviewHeader {
     }
 
     internal fun editPencil(tooltip: String, onClick: () -> Unit): JBLabel =
-        JBLabel(AllIcons.Actions.Edit).apply {
+        editPencil(tooltip, AllIcons.Actions.Edit, onClick)
+
+    internal fun editPencil(tooltip: String, icon: javax.swing.Icon, onClick: () -> Unit): JBLabel =
+        JBLabel(icon).apply {
             toolTipText = tooltip
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             addMouseListener(
