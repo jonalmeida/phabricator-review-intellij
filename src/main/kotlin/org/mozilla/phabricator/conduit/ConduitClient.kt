@@ -1,6 +1,7 @@
 package org.mozilla.phabricator.conduit
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -549,6 +550,32 @@ class ConduitClient(val transport: ConduitTransport) {
     suspend fun listProjectsForMember(userPHID: String): List<Project> =
         searchProjectsByConstraint(buildJsonObject { putJsonArray("members") { add(userPHID) } })
             .toList()
+
+    /**
+     * Prefix-search active users by display name / username, capped at [limit] results. Wire shape
+     * mirrors [client.js#searchUsers] -- `user.search` with constraints `{nameLike: query,
+     * isDisabled: false}`. Returns an empty list for a blank query so a debounced UI picker can
+     * issue the call eagerly without worrying about firing zero-length queries.
+     */
+    suspend fun searchUsersByName(query: String, limit: Int = 8): List<User> {
+        if (query.isBlank()) return emptyList()
+        val constraints = buildJsonObject {
+            put("nameLike", query)
+            put("isDisabled", false)
+        }
+        return searchUsersByConstraint(constraints).take(limit).toList()
+    }
+
+    /**
+     * Prefix-search projects by name, capped at [limit] results. Mozilla's Phabricator uses `name`
+     * as a prefix-match constraint on `project.search`. Empty query short-circuits like
+     * [searchUsersByName].
+     */
+    suspend fun searchProjectsByName(query: String, limit: Int = 8): List<Project> {
+        if (query.isBlank()) return emptyList()
+        val constraints = buildJsonObject { put("name", query) }
+        return searchProjectsByConstraint(constraints).take(limit).toList()
+    }
 
     private fun searchUsersByConstraint(constraints: JsonObject): Flow<User> = paginate { after ->
         val args = buildJsonObject {
