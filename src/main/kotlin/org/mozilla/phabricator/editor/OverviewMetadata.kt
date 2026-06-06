@@ -25,7 +25,7 @@ internal object OverviewMetadata {
             }
 
         addSection(column, "Reviewers", reviewersPanel(project, data, scope))
-        addSection(column, "Projects", projectsPanel(data))
+        addSection(column, "Projects", projectsPanel(project, data, scope))
         if (data.stackParents.isNotEmpty() || data.stackChildren.isNotEmpty()) {
             addSection(column, "Stack", stackPanel(project, data))
         }
@@ -174,18 +174,72 @@ internal object OverviewMetadata {
         return rows
     }
 
-    private fun projectsPanel(data: OverviewData): JPanel {
-        val row = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply { isOpaque = false }
+    private fun projectsPanel(project: Project, data: OverviewData, scope: CoroutineScope): JPanel {
+        val rows =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                isOpaque = false
+            }
+        val chipRow = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply { isOpaque = false }
         if (data.projects.isEmpty()) {
-            row.add(
+            chipRow.add(
                 JBLabel("(none)").apply {
                     foreground = com.intellij.util.ui.UIUtil.getInactiveTextColor()
                 }
             )
         } else {
-            data.projects.forEach { row.add(JBLabel("#${it.displayName}")) }
+            data.projects.forEach { proj ->
+                val chip = JPanel(FlowLayout(FlowLayout.LEFT, 2, 0)).apply { isOpaque = false }
+                chip.add(JBLabel("#${proj.displayName}"))
+                if (data.isAuthor) {
+                    chip.add(
+                        OverviewHeader.editPencil(
+                            "Remove #${proj.displayName}",
+                            com.intellij.icons.AllIcons.Actions.Close,
+                        ) {
+                            val confirmed =
+                                com.intellij.openapi.ui.Messages.showYesNoDialog(
+                                    project,
+                                    "Remove #${proj.displayName} from this revision?",
+                                    "Remove Project",
+                                    com.intellij.openapi.ui.Messages.getQuestionIcon(),
+                                ) == com.intellij.openapi.ui.Messages.YES
+                            if (!confirmed) return@editPencil
+                            scope.launch {
+                                runCatching { data.model.removeProjects(listOf(proj.phid)) }
+                            }
+                        }
+                    )
+                }
+                chipRow.add(chip)
+            }
         }
-        return row
+        chipRow.alignmentX = Component.LEFT_ALIGNMENT
+        rows.add(chipRow)
+        if (data.isAuthor) {
+            val client = RevisionsManager.getInstance(project).session?.client
+            val addRow = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply { isOpaque = false }
+            val addLabel =
+                JBLabel(com.intellij.icons.AllIcons.General.Add).apply {
+                    text = "Add project"
+                    iconTextGap = 4
+                    cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+                }
+            addLabel.addMouseListener(
+                object : java.awt.event.MouseAdapter() {
+                    override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                        val c = client ?: return
+                        ProjectPicker.show(addLabel, c, scope) { p ->
+                            scope.launch { runCatching { data.model.addProjects(listOf(p.phid)) } }
+                        }
+                    }
+                }
+            )
+            addRow.add(addLabel)
+            addRow.alignmentX = Component.LEFT_ALIGNMENT
+            rows.add(addRow)
+        }
+        return rows
     }
 
     private fun stackPanel(project: Project, data: OverviewData): JPanel {

@@ -292,6 +292,40 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
         return result
     }
 
+    /** Add project tags by PHID. Wire: `{type: "projects.add", value: [phids]}`. */
+    suspend fun addProjects(phids: List<String>): EditResult {
+        val result =
+            client.editRevision(
+                objectIdentifier = phid,
+                transactions =
+                    listOf(
+                        buildJsonObject {
+                            put("type", "projects.add")
+                            putJsonArray("value") { phids.forEach { add(it) } }
+                        }
+                    ),
+            )
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Remove project tags by PHID. Wire: `{type: "projects.remove", value: [phids]}`. */
+    suspend fun removeProjects(phids: List<String>): EditResult {
+        val result =
+            client.editRevision(
+                objectIdentifier = phid,
+                transactions =
+                    listOf(
+                        buildJsonObject {
+                            put("type", "projects.remove")
+                            putJsonArray("value") { phids.forEach { add(it) } }
+                        }
+                    ),
+            )
+        signalCommentsChanged()
+        return result
+    }
+
     /** Remove reviewers by PHID. Caller gates on isAuthor (or self-removal of a single phid). */
     suspend fun removeReviewers(phids: List<String>): EditResult {
         val result =
