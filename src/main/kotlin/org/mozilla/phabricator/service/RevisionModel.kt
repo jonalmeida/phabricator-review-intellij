@@ -2,6 +2,8 @@ package org.mozilla.phabricator.service
 
 import com.intellij.openapi.application.ApplicationManager
 import kotlinx.coroutines.flow.toList
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.mozilla.phabricator.conduit.ConduitClient
 import org.mozilla.phabricator.conduit.model.Changeset
 import org.mozilla.phabricator.conduit.model.EditResult
@@ -31,6 +33,18 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
 
     val title: String
         get() = current.fields.title
+
+    /**
+     * Raw Remarkup summary (pre-render). Used as the starting value when opening the edit dialog.
+     */
+    val summaryRaw: String
+        get() = current.fields.summary
+
+    /**
+     * Raw Remarkup test plan (pre-render). Used as the starting value when opening the edit dialog.
+     */
+    val testPlanRaw: String
+        get() = current.fields.testPlan
 
     val statusValue: String
         get() = current.fields.status.value
@@ -215,6 +229,60 @@ class RevisionModel(initial: Revision, private val client: ConduitClient) {
      */
     suspend fun requestReview(body: String? = null): EditResult {
         val result = client.requestReview(revisionPHID = phid, body = body)
+        signalCommentsChanged()
+        return result
+    }
+
+    /**
+     * Set the revision title. Caller gates on isAuthor; Phabricator's API enforces the same on the
+     * server side and will reject with PERM-DENIED otherwise.
+     */
+    suspend fun editTitle(value: String): EditResult {
+        val result =
+            client.editRevision(
+                objectIdentifier = phid,
+                transactions =
+                    listOf(
+                        buildJsonObject {
+                            put("type", "title")
+                            put("value", value)
+                        }
+                    ),
+            )
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Set the Remarkup summary block. Empty string is allowed (clears the field). */
+    suspend fun editSummary(value: String): EditResult {
+        val result =
+            client.editRevision(
+                objectIdentifier = phid,
+                transactions =
+                    listOf(
+                        buildJsonObject {
+                            put("type", "summary")
+                            put("value", value)
+                        }
+                    ),
+            )
+        signalCommentsChanged()
+        return result
+    }
+
+    /** Set the Remarkup test-plan block. Empty string is allowed (clears the field). */
+    suspend fun editTestPlan(value: String): EditResult {
+        val result =
+            client.editRevision(
+                objectIdentifier = phid,
+                transactions =
+                    listOf(
+                        buildJsonObject {
+                            put("type", "testPlan")
+                            put("value", value)
+                        }
+                    ),
+            )
         signalCommentsChanged()
         return result
     }

@@ -10,12 +10,14 @@ import java.awt.FlowLayout
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JPanel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import org.mozilla.phabricator.service.RevisionsManager
 
 /** Reviewers / projects / stack / summary / test plan sections rendered as a vertical column. */
 internal object OverviewMetadata {
 
-    fun build(project: Project, data: OverviewData): JPanel {
+    fun build(project: Project, data: OverviewData, scope: CoroutineScope): JPanel {
         val column =
             JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -27,22 +29,65 @@ internal object OverviewMetadata {
         if (data.stackParents.isNotEmpty() || data.stackChildren.isNotEmpty()) {
             addSection(column, "Stack", stackPanel(project, data))
         }
-        addSection(column, "Summary", htmlPanel(data.summaryHtml))
-        addSection(column, "Test Plan", htmlPanel(data.testPlanHtml))
+        val summaryEdit: (() -> Unit)? =
+            if (data.isAuthor) {
+                {
+                    showEdit(project, scope, "Summary", data.model.summaryRaw) {
+                        data.model.editSummary(it)
+                    }
+                }
+            } else null
+        val testPlanEdit: (() -> Unit)? =
+            if (data.isAuthor) {
+                {
+                    showEdit(project, scope, "Test Plan", data.model.testPlanRaw) {
+                        data.model.editTestPlan(it)
+                    }
+                }
+            } else null
+        addSection(column, "Summary", htmlPanel(data.summaryHtml), summaryEdit)
+        addSection(column, "Test Plan", htmlPanel(data.testPlanHtml), testPlanEdit)
 
         return column
     }
 
-    private fun addSection(column: JPanel, label: String, body: JPanel) {
-        val title =
-            JBLabel(label).apply {
-                font = font.deriveFont(java.awt.Font.BOLD)
+    private fun addSection(
+        column: JPanel,
+        label: String,
+        body: JPanel,
+        onEdit: (() -> Unit)? = null,
+    ) {
+        val titleRow =
+            JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+                isOpaque = false
                 border = JBUI.Borders.empty(8, 0, 4, 0)
                 alignmentX = Component.LEFT_ALIGNMENT
+                add(JBLabel(label).apply { font = font.deriveFont(java.awt.Font.BOLD) })
+                onEdit?.let { add(OverviewHeader.editPencil("Edit $label", it)) }
             }
-        column.add(title)
+        column.add(titleRow)
         body.alignmentX = Component.LEFT_ALIGNMENT
         column.add(body)
+    }
+
+    private fun showEdit(
+        project: Project,
+        scope: CoroutineScope,
+        fieldLabel: String,
+        currentValue: String,
+        save: suspend (String) -> Unit,
+    ) {
+        val dialog =
+            OverviewMetadataEditDialog(
+                project = project,
+                fieldLabel = fieldLabel,
+                currentValue = currentValue,
+                multiline = true,
+            )
+        if (!dialog.showAndGet()) return
+        if (!dialog.isModified) return
+        val newValue = dialog.newValue ?: return
+        scope.launch { runCatching { save(newValue) } }
     }
 
     private fun reviewersPanel(data: OverviewData): JPanel {

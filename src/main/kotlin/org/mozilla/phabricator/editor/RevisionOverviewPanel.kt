@@ -114,14 +114,20 @@ class RevisionOverviewPanel(
 
     private fun renderLoaded(data: OverviewData) {
         column.removeAll()
-        column.add(OverviewHeader.build(data).also { it.alignmentX = Component.LEFT_ALIGNMENT })
+        column.add(
+            OverviewHeader.build(project, data, scope).also {
+                it.alignmentX = Component.LEFT_ALIGNMENT
+            }
+        )
         column.add(
             OverviewActionsToolbar.build(project, data, scope).also {
                 it.alignmentX = Component.LEFT_ALIGNMENT
             }
         )
         column.add(
-            OverviewMetadata.build(project, data).also { it.alignmentX = Component.LEFT_ALIGNMENT }
+            OverviewMetadata.build(project, data, scope).also {
+                it.alignmentX = Component.LEFT_ALIGNMENT
+            }
         )
         column.add(sectionLabel("Files").also { it.alignmentX = Component.LEFT_ALIGNMENT })
         column.add(
