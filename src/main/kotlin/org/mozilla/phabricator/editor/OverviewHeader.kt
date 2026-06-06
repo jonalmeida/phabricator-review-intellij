@@ -1,7 +1,6 @@
 package org.mozilla.phabricator.editor
 
 import com.intellij.icons.AllIcons
-import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.project.Project
 import com.intellij.ui.HyperlinkLabel
 import com.intellij.ui.components.JBLabel
@@ -87,10 +86,7 @@ internal object OverviewHeader {
 
     private fun bugzillaLink(bugId: String): HyperlinkLabel {
         val url = "https://bugzilla.mozilla.org/show_bug.cgi?id=$bugId"
-        return HyperlinkLabel("Bug $bugId").apply {
-            setHyperlinkTarget(url)
-            addHyperlinkListener { BrowserUtil.browse(url) }
-        }
+        return HyperlinkLabel("Bug $bugId").apply { setHyperlinkTarget(url) }
     }
 
     internal fun editPencil(tooltip: String, onClick: () -> Unit): JBLabel =
