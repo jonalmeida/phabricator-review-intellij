@@ -3,6 +3,7 @@ package org.mozilla.phabricator.editor
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
@@ -52,17 +53,24 @@ internal object ReviewerPicker {
                 visibleRowCount = 6
             }
         val searchField =
-            JBTextField().apply {
-                preferredSize = Dimension(JBUI.scale(280), preferredSize.height)
-                emptyText.text = "Search users by name…"
+            JBTextField(20).apply {
+                // 20 columns gives a sensible width without overriding the preferred height,
+                // which used to read `preferredSize.height` from an un-laid-out component (0px).
+            }
+        val hint =
+            JBLabel("Search users by name…").apply {
+                foreground = com.intellij.util.ui.UIUtil.getInactiveTextColor()
+                alignmentX = Component.LEFT_ALIGNMENT
             }
         val panel =
             JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
                 border = JBUI.Borders.empty(6)
-                add(searchField)
-                add(JBUI.Borders.emptyTop(4).let { javax.swing.Box.createVerticalStrut(4) })
-                add(JBUI.size(0, 0).let { javax.swing.JScrollPane(list) })
+                add(hint)
+                add(javax.swing.Box.createVerticalStrut(2))
+                add(searchField.apply { alignmentX = Component.LEFT_ALIGNMENT })
+                add(javax.swing.Box.createVerticalStrut(4))
+                add(javax.swing.JScrollPane(list).apply { alignmentX = Component.LEFT_ALIGNMENT })
             }
 
         var inFlight: Job? = null
