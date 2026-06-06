@@ -347,6 +347,74 @@ class ConduitClient(val transport: ConduitTransport) {
             transactions = actionTransactions(action = "abandon", body = body),
         )
 
+    /**
+     * Take ownership of someone else's revision. Mirrors [client.js#commandeer] — single
+     * `commandeer` transaction with `value: true`. The viewer becomes the new author; the previous
+     * author moves to reviewer.
+     */
+    suspend fun commandeer(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "commandeer", body = body),
+        )
+
+    /**
+     * Remove yourself from the reviewer list. Mirrors [client.js#resign] — single `resign`
+     * transaction with `value: true`. Phabricator allows non-authors to resign even when they're
+     * blocking reviewers.
+     */
+    suspend fun resign(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "resign", body = body),
+        )
+
+    /**
+     * Reclaim an abandoned revision the viewer authored. Re-opens it into the active workflow.
+     *
+     * **Not in VSCode source.** The transaction type `reclaim` is documented only in
+     * `vscode/src/phabricator/txLabels.ts:21-35`. The wire shape `{type: "reclaim", value: true}`
+     * is inferred from Phabricator's transaction-naming convention and pinned by
+     * `Phase4ActionsTest`.
+     */
+    suspend fun reclaim(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "reclaim", body = body),
+        )
+
+    /**
+     * Reopen a closed (published) revision. Same caveat as [reclaim]: inferred from txLabels.ts and
+     * pinned by `Phase4ActionsTest`.
+     */
+    suspend fun reopen(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "reopen", body = body),
+        )
+
+    /**
+     * Move a revision the viewer authored into the "changes planned" state. Author-only action,
+     * used to signal "I know this needs work, hold off reviewing". Wire shape inferred from
+     * txLabels.ts and pinned by `Phase4ActionsTest`.
+     */
+    suspend fun planChanges(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "plan-changes", body = body),
+        )
+
+    /**
+     * Re-request review on a revision the viewer authored (after planning changes, addressing
+     * requested changes, or moving out of draft). Wire shape inferred from txLabels.ts and pinned
+     * by `Phase4ActionsTest`.
+     */
+    suspend fun requestReview(revisionPHID: String, body: String? = null): EditResult =
+        editRevision(
+            objectIdentifier = revisionPHID,
+            transactions = actionTransactions(action = "request-review", body = body),
+        )
+
     private fun actionTransactions(action: String, body: String?): List<JsonObject> {
         val head = buildJsonObject {
             put("type", action)
