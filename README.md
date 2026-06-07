@@ -1,6 +1,6 @@
 # phabricator-review-intellij
 
-JetBrains IDE plugin for browsing and reviewing [Mozilla Phabricator](https://phabricator.services.mozilla.com/) differential revisions inside IntelliJ IDEA, Android Studio, and other IntelliJ-Platform IDEs. Port of [phabricator-review-vscode](https://github.com/jonalmeida/phabricator-review-vscode).
+JetBrains IDE plugin for browsing and reviewing [Mozilla Phabricator](https://phabricator.services.mozilla.com/) differential revisions inside IntelliJ IDEA, Android Studio, and other IntelliJ-Platform IDEs. Port of [phabricator-review-vscode](https://github.com/fchasen/phabricator-review-vscode).
 
 ![demo-image](images/demo.png)
 
