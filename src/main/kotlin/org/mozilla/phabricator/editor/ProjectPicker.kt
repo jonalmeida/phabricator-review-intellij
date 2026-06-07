@@ -46,7 +46,12 @@ internal object ProjectPicker {
                 selectionMode = javax.swing.ListSelectionModel.SINGLE_SELECTION
                 visibleRowCount = 6
             }
-        val searchField = JBTextField(20)
+        val searchField =
+            JBTextField(20).apply {
+                // Cap the maximum height so BoxLayout.Y_AXIS doesn't stretch the field into a
+                // multi-line block -- JTextField's default maximumSize is unbounded vertically.
+                maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+            }
         val hint =
             JBLabel("Search projects by name…").apply {
                 foreground = com.intellij.util.ui.UIUtil.getInactiveTextColor()

@@ -56,6 +56,9 @@ internal object ReviewerPicker {
             JBTextField(20).apply {
                 // 20 columns gives a sensible width without overriding the preferred height,
                 // which used to read `preferredSize.height` from an un-laid-out component (0px).
+                // Cap the maximum height so BoxLayout.Y_AXIS doesn't stretch the field into a
+                // multi-line block -- JTextField's default maximumSize is unbounded vertically.
+                maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
             }
         val hint =
             JBLabel("Search users by name…").apply {
